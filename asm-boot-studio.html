@@ -1443,6 +1443,17 @@ function resetV86Screen(){
   v86ScreenEl.innerHTML='<div></div><canvas></canvas>';
 }
 
+// Track whether editor subtree has focus
+let editorHasFocus=false;
+editorEl.addEventListener('focusin',()=>{editorHasFocus=true;});
+editorEl.addEventListener('focusout',()=>{editorHasFocus=false;});
+
+// Bubble phase on document: stop events reaching window-level v86 listener
+// when editor has focus. CodeMirror (inner element) already got the event.
+document.addEventListener('keydown',event=>{
+  if(editorHasFocus)event.stopPropagation();
+},false);
+
 function focusEditor(){
   if(asmEditor&&asmEditor.focus)asmEditor.focus();
   else{const cm=editorEl.querySelector('.cm-editor');if(cm)cm.focus();}
