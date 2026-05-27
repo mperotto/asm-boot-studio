@@ -110,7 +110,6 @@ button:disabled{opacity:.35;cursor:default;pointer-events:none}
         <canvas></canvas>
       </div>
     </div>
-    <div id="v86-hint" style="display:none;font-size:10px;color:#484f58;letter-spacing:.4px">Ctrl+Alt+Enter → release keyboard</div>
   </div>
 </div>
 <div id="statusbar">
@@ -1154,7 +1153,6 @@ const rlabelEl=document.getElementById('rlabel');
 const pillEl=document.getElementById('pill');
 const v86WrapEl=document.getElementById('v86-wrap');
 const v86ScreenEl=document.getElementById('v86-screen-container');
-const v86HintEl=document.getElementById('v86-hint');
 const creditsModalEl=document.getElementById('credits-modal');
 const creditsTitleEl=document.getElementById('credits-title');
 const creditsTextEl=document.getElementById('credits-text');
@@ -1443,15 +1441,10 @@ function resetV86Screen(){
   v86ScreenEl.innerHTML='<div></div><canvas></canvas>';
 }
 
-// Track whether editor subtree has focus
-let editorHasFocus=false;
-editorEl.addEventListener('focusin',()=>{editorHasFocus=true;});
-editorEl.addEventListener('focusout',()=>{editorHasFocus=false;});
-
-// Bubble phase on document: stop events reaching window-level v86 listener
-// when editor has focus. CodeMirror (inner element) already got the event.
+// v86 uses window.addEventListener('keydown') globally — focus doesn't matter.
+// Block it when any editor element is the active element (bubble fires before window).
 document.addEventListener('keydown',event=>{
-  if(editorHasFocus)event.stopPropagation();
+  if(editorEl.contains(document.activeElement))event.stopPropagation();
 },false);
 
 function focusEditor(){
@@ -1466,7 +1459,6 @@ async function destroyV86(){
   try{await vm.stop()}catch{}
   try{await vm.destroy()}catch{}
   resetV86Screen();
-  v86HintEl.style.display='none';
 }
 
 function updateStaticTexts(){
@@ -1531,7 +1523,6 @@ async function runInV86(result){
   });
   v86Emulator.add_listener('emulator-ready',()=>{
     setMsg('✅ '+t('v86Ready'),'ok');
-    v86HintEl.style.display='block';
     setTimeout(focusEditor,100);
   });
 }
@@ -1646,16 +1637,6 @@ creditsModalEl.addEventListener('click',event=>{
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&creditsModalEl.classList.contains('open'))closeCredits();
 });
-// Capture phase (true) = fires BEFORE v86 canvas listener sees the event
-window.addEventListener('keydown',event=>{
-  if(event.key==='Enter'&&event.ctrlKey&&event.altKey){
-    event.preventDefault();
-    event.stopPropagation();
-    const canvas=v86ScreenEl.querySelector('canvas');
-    if(canvas)canvas.blur();
-    focusEditor();
-  }
-},true);
 savedSel.addEventListener('change',()=>{
   const hasSelection=!!savedSel.value;
   btnLoadSaved.disabled=!hasSelection;
