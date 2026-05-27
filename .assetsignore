@@ -1,0 +1,11 @@
+node_modules/
+src/
+scripts/
+server.mjs
+package.json
+package-lock.json
+.gitignore
+.git/
+README.md
+wrangler.toml
+.assetsignore
