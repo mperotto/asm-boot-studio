@@ -233,6 +233,7 @@ mouse_x:     dw 160
 mouse_y:     dw 100
 mouse_phase: db 0
 mcur_bg:     times 16 db 0
+str_status:  times 16 db 0     ; "X:NNN Y:NNN" buffer
 
 scancode_table:
 db   0,  27, '1','2','3','4','5','6','7','8','9','0','-','=',  8,  9
@@ -466,24 +467,77 @@ draw_mouse_cursor:
     ret
 
 update_status:
-    push edi
-    push ecx
     push eax
+    push ecx
+    push edx
+    push edi
+    push esi
+
+    ; Build "X:NNN Y:NNN" in str_status
+    mov edi, str_status
+    mov byte [edi], 'X'
+    inc edi
+    mov byte [edi], ':'
+    inc edi
+    movzx eax, word [mouse_x]
+    call dec3_str               ; writes 3 chars, advances edi
+    mov byte [edi], ' '
+    inc edi
+    mov byte [edi], 'Y'
+    inc edi
+    mov byte [edi], ':'
+    inc edi
+    movzx eax, word [mouse_y]
+    call dec3_str
+    mov byte [edi], 0           ; null terminate
+
+    ; Clear status area
     mov edi, VGA + STAT_Y*W
     mov ecx, (H - STAT_Y)*W / 4
     xor eax, eax
     rep stosd
-    mov edi, VGA + STAT_Y*W
-    movzx ecx, word [mouse_x]
-    mov al, 0x0A
-    rep stosb
-    mov edi, VGA + (STAT_Y+2)*W
-    movzx ecx, word [mouse_y]
-    mov al, 0x0B
-    rep stosb
-    pop eax
+
+    ; Render "X:NNN Y:NNN" in yellow, preserve text_fg
+    movzx ecx, byte [text_fg]
+    push ecx
+    mov byte [text_fg], 0x0E   ; yellow
+    mov esi, str_status
+    mov ebx, 4
+    mov ecx, STAT_Y
+    call render_str
     pop ecx
+    mov [text_fg], cl          ; restore
+
+    pop esi
     pop edi
+    pop edx
+    pop ecx
+    pop eax
+    ret
+
+dec3_str:
+    ; Convert eax (0-999) → 3 decimal chars at [edi], edi advances by 3
+    push edx
+    push ecx
+    mov ecx, 100
+    xor edx, edx
+    div ecx                    ; eax=hundreds, edx=remainder
+    add al, '0'
+    mov [edi], al
+    inc edi
+    mov eax, edx
+    mov ecx, 10
+    xor edx, edx
+    div ecx                    ; eax=tens, edx=units
+    add al, '0'
+    mov [edi], al
+    inc edi
+    mov al, dl
+    add al, '0'
+    mov [edi], al
+    inc edi
+    pop ecx
+    pop edx
     ret
 
 
