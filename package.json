@@ -1,0 +1,24 @@
+{
+  "name": "asm-boot-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "build:editor": "esbuild src/codemirror-asm.js --bundle --format=iife --global-name=AsmEditorBundle --outfile=vendor/codemirror/asm-editor.js",
+    "build:nasm-wasm": "bash scripts/build-nasm-wasm.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@codemirror/autocomplete": "^6.20.2",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/search": "^6.7.0",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.43.0",
+    "@lezer/highlight": "^1.2.3",
+    "esbuild": "^0.28.0"
+  }
+}

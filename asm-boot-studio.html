@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ASM Boot Studio</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',system-ui,sans-serif;display:flex;flex-direction:column;height:100vh}
+#toolbar{background:#161b22;border-bottom:1px solid #30363d;padding:7px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.logo{color:#58a6ff;font-weight:700;font-size:13px;margin-right:4px;white-space:nowrap}
+select,button,input{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:4px 10px;font-size:12px;font-family:inherit}
+button{cursor:pointer}
+input{cursor:text;min-width:140px}
+button:hover{border-color:#58a6ff;background:#1c2128}
+#file-menu{position:relative}
+#file-menu-btn{min-width:72px;text-align:left}
+#file-menu-list{position:absolute;top:calc(100% + 6px);left:0;display:none;min-width:180px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px;box-shadow:0 12px 30px rgba(0,0,0,.35);z-index:20}
+#file-menu.open #file-menu-list{display:block}
+.menu-item{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:6px;padding:7px 10px;color:#c9d1d9}
+.menu-item:hover{background:#21262d;border-color:#30363d}
+#btn-run{background:#1a7f37;border-color:#2ea043;color:#fff;font-weight:600}
+#btn-run:hover{background:#238636}
+button:disabled{opacity:.35;cursor:default;pointer-events:none}
+.sp{flex:1}
+#pill{font-size:11px;padding:2px 9px;border-radius:10px;background:#21262d;border:1px solid #30363d;color:#8b949e;white-space:nowrap}
+#main{display:flex;flex:1;overflow:hidden}
+/* Editor */
+#left{display:flex;flex-direction:column;width:52%;border-right:1px solid #30363d;min-width:0}
+#editor-wrap{flex:1;overflow:hidden;background:#0d1117}
+#editor{height:100%}
+#code{display:none}
+#hex-panel{background:#161b22;border-top:1px solid #30363d;padding:7px 12px;font:11px/17px 'Courier New',monospace;color:#3fb950;max-height:88px;overflow-y:auto;flex-shrink:0;word-break:break-all}
+/* v86 */
+#right{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#080c12;padding:12px;gap:8px}
+#rlabel{font-size:10px;color:#30363d;text-transform:uppercase;letter-spacing:.8px;align-self:flex-start;padding-left:4px}
+#v86-wrap{width:100%;max-width:640px;aspect-ratio:4/3;background:#000;border:2px solid #1b3f6b;border-radius:3px;box-shadow:0 0 18px rgba(63,146,255,.25),inset 0 0 40px rgba(0,20,50,.45);overflow:hidden}
+#v86-screen-container{width:100%;height:100%;display:flex;align-items:stretch;justify-content:stretch;background:#000}
+#v86-screen-container>div{flex:1;white-space:pre;font:13px/1.35 'Courier New',monospace;color:#d7eaff;padding:10px 12px;overflow:hidden}
+#v86-screen-container>canvas{width:100%;height:100%;display:none;image-rendering:pixelated}
+/* Status bar */
+#statusbar{background:#161b22;border-top:1px solid #30363d;padding:5px 12px;display:flex;align-items:center;gap:10px;font-size:11px;flex-shrink:0}
+#msg{flex:1}.ok{color:#3fb950}.err{color:#f85149}.info{color:#58a6ff}.warn{color:#d29922}
+#credits-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(1,4,9,.75);padding:20px;z-index:40}
+#credits-modal.open{display:flex}
+#credits-card{width:min(680px,100%);max-height:min(78vh,720px);overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.45);padding:18px}
+#credits-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+#credits-title{font-size:16px;font-weight:700;color:#e6edf3}
+#credits-close{min-width:88px}
+#credits-text{font-size:12px;line-height:1.55;color:#8b949e;margin-bottom:14px}
+#credits-list{display:grid;gap:10px}
+.credit-item{border:1px solid #30363d;border-radius:10px;padding:12px;background:#0d1117}
+.credit-item h3{font-size:13px;color:#e6edf3;margin-bottom:4px}
+.credit-item p{font-size:12px;line-height:1.5;color:#8b949e;margin-bottom:7px}
+.credit-item a{color:#58a6ff;text-decoration:none;word-break:break-all}
+.credit-item a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <span class="logo">🖥 ASM Boot Studio</span>
+  <select id="lang-sel" aria-label="Language">
+    <option value="pt-BR">PT-BR</option>
+    <option value="en">EN</option>
+    <option value="zh-CN">中文</option>
+  </select>
+  <div id="file-menu">
+    <button id="file-menu-btn" type="button">File ▾</button>
+    <div id="file-menu-list">
+      <button id="btn-open" class="menu-item" type="button">Abrir arquivo</button>
+      <button id="btn-save-source" class="menu-item" type="button">Salvar fonte .asm</button>
+      <button id="btn-save-local" class="menu-item" type="button">Salvar local</button>
+      <button id="btn-save-as" class="menu-item" type="button">Salvar como</button>
+      <button id="btn-download" class="menu-item" type="button" disabled>Baixar .img</button>
+      <button id="btn-credits" class="menu-item" type="button">Creditos</button>
+    </div>
+  </div>
+  <input id="project-name" type="text" value="boot" spellcheck="false">
+  <select id="saved-sel">
+    <option value="">Sem salvos</option>
+  </select>
+  <button id="btn-load-saved">Carregar</button>
+  <button id="btn-delete-saved">Excluir</button>
+  <select id="ex-sel">
+    <option value="hello">Olá Mundo</option>
+    <option value="counter">Contador</option>
+    <option value="multi">Multi-linha</option>
+    <option value="stage2">Dois estágios</option>
+    <option value="minimal">Mínimo</option>
+  </select>
+  <button id="btn-run">▶ Montar &amp; Rodar</button>
+  <div class="sp"></div>
+  <span id="pill">NASM WASM · x86 Real Mode · v86 Local</span>
+</div>
+<div id="main">
+  <div id="left">
+    <div id="editor-wrap">
+      <textarea id="code" spellcheck="false" autocomplete="off"></textarea>
+      <div id="editor"></div>
+    </div>
+    <div id="hex-panel"><span id="hex-out" style="color:#484f58">Hex aparecerá após montagem...</span></div>
+  </div>
+  <div id="right">
+    <div id="rlabel">Saída v86 x86 Real Mode</div>
+    <div id="v86-wrap">
+      <div id="v86-screen-container">
+        <div></div>
+        <canvas></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="statusbar">
+  <span id="msg" class="info">Selecione um exemplo e pressione ▶ Montar &amp; Rodar</span>
+  <span id="sz"></span>
+</div>
+<div id="credits-modal" aria-hidden="true">
+  <div id="credits-card" role="dialog" aria-modal="true" aria-labelledby="credits-title">
+    <div id="credits-head">
+      <div id="credits-title">Creditos</div>
+      <button id="credits-close" type="button">Fechar</button>
+    </div>
+    <div id="credits-text"></div>
+    <div id="credits-list"></div>
+  </div>
+</div>
+<input id="file-open-input" type="file" accept=".asm,.inc,.txt,text/plain" hidden>
+<script src="./vendor/v86/libv86.js"></script>
+<script src="./vendor/codemirror/asm-editor.js"></script>
+<script>
+// ═══════════════════════════════════════════════
+// EXEMPLOS
+// ═══════════════════════════════════════════════
+const EXAMPLES = {
+hello:`; Hello World Bootloader - x86 Real Mode (NASM)
+; Executado em 0x7C00 pela BIOS do PC
+org 0x7c00
+bits 16
+
+start:
+    cli
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    mov sp, 0x7c00
+    sti
+
+    mov si, msg
+print_loop:
+    lodsb
+    or al, al
+    jz print_done
+    mov ah, 0x0e
+    mov bh, 0
+    int 0x10
+    jmp print_loop
+print_done:
+    hlt
+
+msg db 'Ola, Mundo! x86 Real Mode', 13, 10
+    db 'Curitiba - Parana - Brasil', 13, 10
+    db 'ASM Boot Studio v2.0', 13, 10, 0
+
+times 510-($ - $$) db 0
+dw 0xAA55`,
+
+counter:`; Contador 9..1 -> GO!
+org 0x7c00
+bits 16
+
+start:
+    cli
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    mov sp, 0x7c00
+    sti
+
+    mov cx, 9
+cnt_loop:
+    push cx
+    mov ah, 0x0e
+    mov al, cl
+    add al, 48
+    mov bh, 0
+    int 0x10
+    mov al, 32
+    int 0x10
+    pop cx
+    dec cx
+    jnz cnt_loop
+
+    mov si, go_msg
+go_loop:
+    lodsb
+    or al, al
+    jz halt
+    mov ah, 0x0e
+    mov bh, 0
+    int 0x10
+    jmp go_loop
+halt:
+    hlt
+
+go_msg db '-> GO! Bootloader OK!', 13, 10, 0
+
+times 510-($ - $$) db 0
+dw 0xAA55`,
+
+multi:`; Multi-linha com subrotina CALL
+org 0x7c00
+bits 16
+
+start:
+    cli
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    mov sp, 0x7c00
+    sti
+
+    mov ah, 0
+    mov al, 3
+    int 0x10
+
+    mov si, line1
+    call print
+    mov si, line2
+    call print
+    mov si, line3
+    call print
+    mov si, line4
+    call print
+    hlt
+
+print:
+    lodsb
+    or al, al
+    jz pret
+    mov ah, 0x0e
+    mov bh, 0
+    int 0x10
+    jmp print
+pret:
+    ret
+
+line1 db '================================', 13, 10, 0
+line2 db '  ASM Boot Studio - x86 / NASM  ', 13, 10, 0
+line3 db '  Curitiba / Parana / Brasil    ', 13, 10, 0
+line4 db '================================', 13, 10, 0
+
+times 510-($ - $$) db 0
+dw 0xAA55`,
+
+stage2:`; Bootloader em dois estagios
+; A BIOS carrega apenas o primeiro setor em 0000:7C00.
+; Este setor 1 carrega o setor 2 para 0000:8000 e salta para ele.
+org 0x7c00
+bits 16
+
+STAGE2_ADDR equ 0x8000
+
+start:
+    cli
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    mov sp, 0x7c00
+    sti
+
+    mov [boot_drive], dl
+
+    mov si, msg_stage1
+    call print
+
+    ; Ler 1 setor do disco:
+    ; CH=cilindro 0, DH=cabeca 0, CL=setor 2.
+    ; ES:BX=0000:8000 e o destino na memoria.
+    xor ax, ax
+    mov es, ax
+    mov bx, STAGE2_ADDR
+    mov ah, 0x02
+    mov al, 1
+    mov ch, 0
+    mov cl, 2
+    mov dh, 0
+    mov dl, [boot_drive]
+    int 0x13
+    jc disk_error
+
+    mov si, msg_jump
+    call print
+    jmp 0x0000:STAGE2_ADDR
+
+disk_error:
+    mov si, msg_error
+    call print
+halt:
+    hlt
+    jmp halt
+
+print:
+    lodsb
+    or al, al
+    jz .done
+    mov ah, 0x0e
+    mov bx, 0x0007
+    int 0x10
+    jmp print
+.done:
+    ret
+
+boot_drive db 0
+msg_stage1 db 'Stage 1: setor de boot em 7C00', 13, 10, 0
+msg_jump   db 'Stage 1: setor 2 carregado em 8000', 13, 10, 0
+msg_error  db 'Erro ao ler o setor 2', 13, 10, 0
+
+times 510-($ - $$) db 0
+dw 0xAA55
+
+; Daqui para baixo esta o setor 2 do disco.
+; Ele nao e carregado pela BIOS: quem carrega e o Stage 1.
+stage2:
+    mov ax, 0
+    mov ds, ax
+    mov es, ax
+
+    mov si, msg_stage2 - stage2 + STAGE2_ADDR
+    call print_stage2
+
+    mov si, msg_kernel - stage2 + STAGE2_ADDR
+    call print_stage2
+
+stage2_halt:
+    hlt
+    jmp stage2_halt
+
+print_stage2:
+    lodsb
+    or al, al
+    jz .done
+    mov ah, 0x0e
+    mov bx, 0x0007
+    int 0x10
+    jmp print_stage2
+.done:
+    ret
+
+msg_stage2 db 'Stage 2: codigo vindo do proximo setor!', 13, 10, 0
+msg_kernel db 'Ideia central: bootloader pequeno carrega um kernel maior.', 13, 10, 0
+
+times 1024-($ - $$) db 0`,
+
+minimal:`; Bootloader minimo
+org 0x7c00
+bits 16
+    hlt
+times 510-($ - $$) db 0
+dw 0xAA55`
+};
+
+const I18N = {
+  'pt-BR': {
+  htmlLang:'pt-BR',
+  exampleLabels:{hello:'Ola Mundo',counter:'Contador',multi:'Multi-linha',stage2:'Dois estagios',minimal:'Minimo'},
+  fileMenu:'Arquivo ▾',
+  projectNamePlaceholder:'nome-do-projeto',
+  open:'Abrir arquivo',
+  saveSource:'Salvar fonte .asm',
+  saveLocal:'Salvar local',
+  saveAs:'Salvar como',
+  credits:'Creditos',
+  loadSaved:'Carregar',
+  deleteSaved:'Excluir',
+  noSaved:'Sem salvos',
+  run:'▶ Montar & Rodar',
+  download:'Baixar .img',
+  pill:'NASM WASM · x86 Real Mode · v86 Local',
+  outputLabel:'Saida v86 x86 Real Mode',
+  hexPlaceholder:'Hex aparecera apos montagem...',
+  initialMsg:'Selecione um exemplo e pressione ▶ Montar & Rodar',
+  exampleLoaded:'Exemplo carregado. Pressione ▶ para executar.',
+  assembling:'Montando com NASM WASM...',
+  v86Booting:'Iniciando v86 local...',
+  v86Ready:'v86 local iniciado. BIOS carregada.',
+  openedFile:'Arquivo carregado do computador.',
+  saveDone:'Projeto salvo no navegador.',
+  saveAsDone:'Copia salva como novo projeto.',
+  loadDone:'Projeto local carregado.',
+  deleteDone:'Projeto local removido.',
+  askDelete:'Excluir este projeto local?',
+  chooseSaved:'Selecione um projeto salvo.',
+  readFail:'Nao foi possivel ler o arquivo.',
+  asmFail:'Falha ao montar com NASM WASM.',
+  creditsTitle:'Creditos e projetos utilizados',
+  creditsIntro:'Este projeto se apoia em ferramentas open source importantes. Os links abaixo apontam para as paginas oficiais.',
+  authorTitle:'Concepcao do projeto',
+  authorRole:'Ideia original e direcao do projeto',
+  close:'Fechar',
+  bytes:'bytes',
+  noSignature:'sem assinatura',
+  v86Status:'v86 ativo'
+},
+'en': {
+  htmlLang:'en',
+  exampleLabels:{hello:'Hello World',counter:'Counter',multi:'Multi-line',stage2:'Two-stage boot',minimal:'Minimal'},
+  fileMenu:'File ▾',
+  projectNamePlaceholder:'project-name',
+  open:'Open File',
+  saveSource:'Save Source .asm',
+  saveLocal:'Save Local',
+  saveAs:'Save As',
+  credits:'Credits',
+  loadSaved:'Load',
+  deleteSaved:'Delete',
+  noSaved:'No saved files',
+  run:'▶ Assemble & Run',
+  download:'Download .img',
+  pill:'NASM WASM · x86 Real Mode · Local v86',
+  outputLabel:'Local v86 x86 Output',
+  hexPlaceholder:'Hex will appear after assembly...',
+  initialMsg:'Choose an example and press ▶ Assemble & Run',
+  exampleLoaded:'Example loaded. Press ▶ to run.',
+  assembling:'Assembling with NASM WASM...',
+  v86Booting:'Starting local v86...',
+  v86Ready:'Local v86 started. BIOS loaded.',
+  openedFile:'File loaded from your machine.',
+  saveDone:'Project saved in browser storage.',
+  saveAsDone:'Copy saved as a new project.',
+  loadDone:'Local project loaded.',
+  deleteDone:'Local project removed.',
+  askDelete:'Delete this local project?',
+  chooseSaved:'Choose a saved project.',
+  readFail:'Could not read the file.',
+  asmFail:'Failed to assemble with NASM WASM.',
+  creditsTitle:'Credits and used projects',
+  creditsIntro:'This project builds on important open source tools. The links below point to the official project pages.',
+  authorTitle:'Project concept',
+  authorRole:'Original idea and project direction',
+  close:'Close',
+  bytes:'bytes',
+  noSignature:'no signature',
+  v86Status:'v86 running'
+},
+'zh-CN': {
+  htmlLang:'zh-CN',
+  exampleLabels:{hello:'你好，世界',counter:'计数器',multi:'多行输出',stage2:'两阶段启动',minimal:'最小示例'},
+  fileMenu:'文件 ▾',
+  projectNamePlaceholder:'项目名称',
+  open:'打开文件',
+  saveSource:'保存源码 .asm',
+  saveLocal:'保存到本地',
+  saveAs:'另存为',
+  credits:'致谢',
+  loadSaved:'加载',
+  deleteSaved:'删除',
+  noSaved:'没有已保存项目',
+  run:'▶ 汇编并运行',
+  download:'下载 .img',
+  pill:'NASM WASM · x86 实模式 · 本地 v86',
+  outputLabel:'本地 v86 x86 输出',
+  hexPlaceholder:'汇编后将在这里显示十六进制...',
+  initialMsg:'请选择一个示例，然后点击 ▶ 汇编并运行',
+  exampleLoaded:'示例已加载。点击 ▶ 运行。',
+  assembling:'正在使用 NASM WASM 汇编...',
+  v86Booting:'正在启动本地 v86...',
+  v86Ready:'本地 v86 已启动，BIOS 已加载。',
+  openedFile:'已从你的设备加载文件。',
+  saveDone:'项目已保存到浏览器本地存储。',
+  saveAsDone:'已另存为新项目。',
+  loadDone:'本地项目已加载。',
+  deleteDone:'本地项目已删除。',
+  askDelete:'要删除这个本地项目吗？',
+  chooseSaved:'请选择一个已保存项目。',
+  readFail:'无法读取该文件。',
+  asmFail:'使用 NASM WASM 汇编失败。',
+  creditsTitle:'致谢与所用项目',
+  creditsIntro:'这个项目建立在一些重要的开源工具之上。下面的链接都指向它们的官方页面。',
+  authorTitle:'项目构思',
+  authorRole:'最初创意与项目方向',
+  close:'关闭',
+  bytes:'字节',
+  noSignature:'无引导签名',
+  v86Status:'v86 运行中'
+}
+};
+
+const PROJECT_AUTHOR = {
+  name:'MSc. Marcelo Antonio Perotto',
+  role:'Professor de Ciencia da Computacao',
+  email:'mperotto@gmail.com'
+};
+
+const CREDITS = [
+  {
+    name:'NASM',
+    url:'https://www.nasm.us/',
+    desc:{
+      'pt-BR':'Assembler usado no navegador via WebAssembly para gerar as imagens binarias.',
+      'en':'Assembler used in the browser through WebAssembly to generate raw binary images.',
+      'zh-CN':'通过 WebAssembly 在浏览器中运行的汇编器，用来生成原始二进制镜像。'
+    }
+  },
+  {
+    name:'v86',
+    url:'https://github.com/copy/v86',
+    desc:{
+      'pt-BR':'Emulador x86 usado para inicializar e executar as imagens localmente no navegador.',
+      'en':'x86 emulator used to boot and run the images locally in the browser.',
+      'zh-CN':'用于在浏览器本地启动并运行镜像的 x86 模拟器。'
+    }
+  },
+  {
+    name:'CodeMirror 6',
+    url:'https://codemirror.net/',
+    desc:{
+      'pt-BR':'Base do editor de codigo com destaque de sintaxe, busca e autocomplete local.',
+      'en':'Code editor foundation for syntax highlighting, search, and local autocomplete.',
+      'zh-CN':'代码编辑器基础，提供语法高亮、搜索和本地自动补全。'
+    }
+  },
+  {
+    name:'SeaBIOS',
+    url:'https://seabios.org/SeaBIOS',
+    desc:{
+      'pt-BR':'BIOS aberta usada pelo ambiente de emulacao para o processo de boot.',
+      'en':'Open BIOS used by the emulation environment during the boot process.',
+      'zh-CN':'模拟环境在启动过程中使用的开源 BIOS。'
+    }
+  },
+  {
+    name:'Emscripten',
+    url:'https://emscripten.org/',
+    desc:{
+      'pt-BR':'Toolchain usada para compilar o NASM para WebAssembly no fluxo de manutencao.',
+      'en':'Toolchain used to compile NASM to WebAssembly in the maintenance build flow.',
+      'zh-CN':'在维护构建流程中将 NASM 编译为 WebAssembly 的工具链。'
+    }
+  },
+  {
+    name:'esbuild',
+    url:'https://esbuild.github.io/',
+    desc:{
+      'pt-BR':'Empacotador usado para gerar o bundle local do editor CodeMirror.',
+      'en':'Bundler used to generate the local CodeMirror editor bundle.',
+      'zh-CN':'用于生成本地 CodeMirror 编辑器打包文件的构建工具。'
+    }
+  }
+];
+
+// ═══════════════════════════════════════════════
+// ASSEMBLER x86 REAL MODE (two-pass, NASM syntax)
+// ═══════════════════════════════════════════════
+class X86Asm {
+  constructor(){this.reset()}
+  reset(){this.org=0x7C00;this.bytes=[];this.labels={};this.errors=[];this.pc=0x7C00;this.pass=1;this.lineNum=0}
+
+  assemble(src){
+    this.errors=[];this.labels={};
+    this._run(src,1); if(this.errors.length)return null;
+    this._run(src,2); if(this.errors.length)return null;
+    return new Uint8Array(this.bytes);
+  }
+
+  _run(src,pass){
+    this.pass=pass;this.bytes=[];this.pc=this.org;this.lineNum=0;
+    for(const[i,raw] of src.split('\n').entries()){
+      this.lineNum=i+1;
+      let line=raw;
+      const ci=line.indexOf(';');if(ci>=0)line=line.substring(0,ci);
+      line=line.trim();if(!line)continue;
+      const lm=line.match(/^([.\w]+):\s*(.*)?$/);
+      if(lm){
+        if(pass===1){if(this.labels[lm[1]]!==undefined)this._err(`Label dup: ${lm[1]}`);else this.labels[lm[1]]=this.pc;}
+        line=(lm[2]||'').trim();if(!line)continue;
+      }
+      this._parseLine(line);
+      if(this.errors.length>8)break;
+    }
+  }
+
+  _emit(...bs){for(const b of bs){this.bytes.push(b&0xFF);this.pc++}}
+  _emit16(w){this._emit(w&0xFF,(w>>8)&0xFF)}
+  _err(m){this.errors.push(`L${this.lineNum}: ${m}`)}
+
+  _expr(s){
+    s=s.trim();if(!s)return null;
+    s=s.replace(/\$\$/g,`(${this.org})`).replace(/\$/g,`(${this.pc})`);
+    for(const[lbl,addr] of Object.entries(this.labels)){
+      const esc=lbl.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      s=s.replace(new RegExp(`(?<![\\w.])${esc}(?![\\w.])`, 'g'),`(${addr})`);
+    }
+    s=s.replace(/'(.)'/g,(_,c)=>c.charCodeAt(0));
+    s=s.replace(/0x([0-9a-fA-F]+)/gi,(_,h)=>parseInt(h,16));
+    if(!/^[\d+\-*\/()%\s]+$/.test(s)){return this.pass===1?0:null}
+    try{return Math.trunc(eval(s))}catch{return null}
+  }
+
+  _r16(s){return{ax:0,cx:1,dx:2,bx:3,sp:4,bp:5,si:6,di:7}[s?.toLowerCase()]??null}
+  _r8(s){return{al:0,cl:1,dl:2,bl:3,ah:4,ch:5,dh:6,bh:7}[s?.toLowerCase()]??null}
+  _sr(s){return{es:0,cs:1,ss:2,ds:3}[s?.toLowerCase()]??null}
+
+  _parseLine(line){
+    const m=line.match(/^([.\w]+)(?:\s+(.*))?$/);
+    if(!m){this._err(`Sintaxe: ${line}`);return}
+    this._instr(m[1].toLowerCase(),this._splitOps(m[2]||''),m[2]||'');
+  }
+
+  _splitOps(s){
+    if(!s)return[];
+    const r=[];let d=0,cur='';
+    for(const c of s){
+      if(c==='('||c==='[')d++;else if(c===')'||c===']')d--;
+      else if(c===','&&d===0){r.push(cur.trim());cur='';continue}
+      cur+=c;
+    }
+    if(cur.trim())r.push(cur.trim());return r;
+  }
+
+  _instr(mn,ops,raw){
+    const o0=ops[0]||'',o1=ops[1]||'';
+    switch(mn){
+      case 'org':{const v=this._expr(o0);if(v!==null){this.org=v;this.pc=v}}break;
+      case 'bits':break;
+      case 'db':{
+        for(const v of ops){const vs=v.trim();
+          if(/^["'].*["']$/.test(vs)){for(const c of vs.slice(1,-1))this._emit(c.charCodeAt(0))}
+          else{const n=this._expr(vs);if(n===null){if(this.pass===2)this._err(`db:${vs}`)}else this._emit(n&0xFF)}
+        }break;}
+      case 'dw':{for(const v of ops){const n=this._expr(v.trim());if(n===null){if(this.pass===2)this._err(`dw:${v}`)}else this._emit16(n)}break;}
+      case 'dd':{for(const v of ops){const n=this._expr(v.trim());if(n!==null){this._emit16(n&0xFFFF);this._emit16((n>>>16)&0xFFFF)}}break;}
+      case 'times':{
+        const tm=raw.match(/^(.+?)\s+(db|dw)\s+(.+)$/i);
+        if(!tm){this._err('times: sintaxe');break}
+        const cnt=this._expr(tm[1]);
+        if(cnt===null||cnt<0){if(this.pass===2)this._err(`times cnt=${cnt}`);break}
+        const val=this._expr(tm[3]);if(val===null){if(this.pass===2)this._err('times val');break}
+        for(let i=0;i<cnt;i++){if(tm[2].toLowerCase()==='db')this._emit(val&0xFF);else this._emit16(val)}
+        break;}
+      case 'nop':this._emit(0x90);break;case 'hlt':this._emit(0xF4);break;
+      case 'cli':this._emit(0xFA);break;case 'sti':this._emit(0xFB);break;
+      case 'clc':this._emit(0xF8);break;case 'stc':this._emit(0xF9);break;
+      case 'cld':this._emit(0xFC);break;case 'std':this._emit(0xFD);break;
+      case 'ret':this._emit(0xC3);break;case 'retf':this._emit(0xCB);break;
+      case 'iret':this._emit(0xCF);break;
+      case 'lodsb':this._emit(0xAC);break;case 'lodsw':this._emit(0xAD);break;
+      case 'stosb':this._emit(0xAA);break;case 'stosw':this._emit(0xAB);break;
+      case 'movsb':this._emit(0xA4);break;case 'movsw':this._emit(0xA5);break;
+      case 'scasb':this._emit(0xAE);break;
+      case 'cbw':this._emit(0x98);break;case 'cwd':this._emit(0x99);break;
+      case 'pusha':this._emit(0x60);break;case 'popa':this._emit(0x61);break;
+      case 'pushf':this._emit(0x9C);break;case 'popf':this._emit(0x9D);break;
+      case 'xlat':this._emit(0xD7);break;
+      case 'int':{const n=this._expr(o0);if(n!==null)this._emit(0xCD,n&0xFF);break}
+      case 'into':this._emit(0xCE);break;
+      case 'push':{
+        const r=this._r16(o0);if(r!==null){this._emit(0x50+r);break}
+        const sr=this._sr(o0);if(sr!==null){this._emit(0x06|(sr<<3));break}
+        const n=this._expr(o0);if(n!==null){if(n>=-128&&n<=127)this._emit(0x6A,n&0xFF);else{this._emit(0x68);this._emit16(n)}}
+        break;}
+      case 'pop':{
+        const r=this._r16(o0);if(r!==null){this._emit(0x58+r);break}
+        const sr=this._sr(o0);if(sr!==null){this._emit(0x07|(sr<<3));break}
+        break;}
+      case 'inc':{const r=this._r16(o0);if(r!==null){this._emit(0x40+r);break}const r8=this._r8(o0);if(r8!==null){this._emit(0xFE,0xC0|r8);break}break;}
+      case 'dec':{const r=this._r16(o0);if(r!==null){this._emit(0x48+r);break}const r8=this._r8(o0);if(r8!==null){this._emit(0xFE,0xC8|r8);break}break;}
+      case 'mov':this._mov(o0.toLowerCase(),o1.toLowerCase());break;
+      case 'xor':this._alu(0x30,0x31,0x32,0x33,0x34,0x35,6,o0,o1);break;
+      case 'or': this._alu(0x08,0x09,0x0A,0x0B,0x0C,0x0D,1,o0,o1);break;
+      case 'and':this._alu(0x20,0x21,0x22,0x23,0x24,0x25,4,o0,o1);break;
+      case 'add':this._alu(0x00,0x01,0x02,0x03,0x04,0x05,0,o0,o1);break;
+      case 'sub':this._alu(0x28,0x29,0x2A,0x2B,0x2C,0x2D,5,o0,o1);break;
+      case 'cmp':this._alu(0x38,0x39,0x3A,0x3B,0x3C,0x3D,7,o0,o1);break;
+      case 'adc':this._alu(0x10,0x11,0x12,0x13,0x14,0x15,2,o0,o1);break;
+      case 'sbb':this._alu(0x18,0x19,0x1A,0x1B,0x1C,0x1D,3,o0,o1);break;
+      case 'test':{
+        const d8=this._r8(o0),s8=this._r8(o1),d16=this._r16(o0),s16=this._r16(o1);
+        if(d8!==null&&s8!==null){this._emit(0x84,0xC0|(s8<<3)|d8);break}
+        if(d16!==null&&s16!==null){this._emit(0x85,0xC0|(s16<<3)|d16);break}
+        const lo=o0.toLowerCase();
+        if(lo==='al'){const n=this._expr(o1);if(n!==null)this._emit(0xA8,n&0xFF);break}
+        if(lo==='ax'){const n=this._expr(o1);if(n!==null){this._emit(0xA9);this._emit16(n);}break}
+        break;}
+      case 'not':{const r=this._r16(o0);if(r!==null)this._emit(0xF7,0xD0|r);break}
+      case 'neg':{const r=this._r16(o0);if(r!==null)this._emit(0xF7,0xD8|r);break}
+      case 'mul':{const r=this._r16(o0);if(r!==null){this._emit(0xF7,0xE0|r);break}const r8=this._r8(o0);if(r8!==null)this._emit(0xF6,0xE0|r8);break}
+      case 'div':{const r=this._r16(o0);if(r!==null){this._emit(0xF7,0xF0|r);break}const r8=this._r8(o0);if(r8!==null)this._emit(0xF6,0xF0|r8);break}
+      case 'idiv':{const r=this._r16(o0);if(r!==null)this._emit(0xF7,0xF8|r);break}
+      case 'shl':case 'sal':this._shift(4,o0,o1);break;
+      case 'shr':this._shift(5,o0,o1);break;
+      case 'sar':this._shift(7,o0,o1);break;
+      case 'rol':this._shift(0,o0,o1);break;
+      case 'ror':this._shift(1,o0,o1);break;
+      case 'rcl':this._shift(2,o0,o1);break;
+      case 'rcr':this._shift(3,o0,o1);break;
+      case 'jmp':this._jmp(o0);break;
+      case 'call':this._call(o0);break;
+      case 'je':case 'jz':this._jcc(0x74,o0);break;
+      case 'jne':case 'jnz':this._jcc(0x75,o0);break;
+      case 'jb':case 'jc':this._jcc(0x72,o0);break;
+      case 'jnb':case 'jnc':case 'jae':this._jcc(0x73,o0);break;
+      case 'jbe':case 'jna':this._jcc(0x76,o0);break;
+      case 'ja':case 'jnbe':this._jcc(0x77,o0);break;
+      case 'jl':case 'jnge':this._jcc(0x7C,o0);break;
+      case 'jge':case 'jnl':this._jcc(0x7D,o0);break;
+      case 'jle':case 'jng':this._jcc(0x7E,o0);break;
+      case 'jg':case 'jnle':this._jcc(0x7F,o0);break;
+      case 'js':this._jcc(0x78,o0);break;case 'jns':this._jcc(0x79,o0);break;
+      case 'jo':this._jcc(0x70,o0);break;case 'jno':this._jcc(0x71,o0);break;
+      case 'jp':case 'jpe':this._jcc(0x7A,o0);break;
+      case 'jnp':case 'jpo':this._jcc(0x7B,o0);break;
+      case 'jcxz':this._jcc(0xE3,o0);break;
+      case 'loop':this._jcc(0xE2,o0);break;
+      case 'loope':this._jcc(0xE1,o0);break;
+      case 'loopne':this._jcc(0xE0,o0);break;
+      case 'in':{
+        const lo=o0.toLowerCase(),rhs=o1.toLowerCase();
+        if(lo==='al'&&rhs==='dx'){this._emit(0xEC);break}
+        if(lo==='ax'&&rhs==='dx'){this._emit(0xED);break}
+        if(lo==='al'){const n=this._expr(o1);if(n!==null)this._emit(0xE4,n&0xFF);break}
+        break;}
+      case 'out':{
+        const lo=o0.toLowerCase(),rhs=o1.toLowerCase();
+        if(lo==='dx'&&rhs==='al'){this._emit(0xEE);break}
+        if(rhs==='al'){const n=this._expr(o0);if(n!==null)this._emit(0xE6,n&0xFF);break}
+        break;}
+      case 'xchg':{
+        const d16=this._r16(o0),s16=this._r16(o1);
+        if(d16===0&&s16!==null){this._emit(0x90|s16);break}
+        if(s16===0&&d16!==null){this._emit(0x90|d16);break}
+        if(d16!==null&&s16!==null)this._emit(0x87,0xC0|(d16<<3)|s16);
+        break;}
+      case 'lea':{
+        const r=this._r16(o0);
+        if(r!==null&&o1.startsWith('[')&&o1.endsWith(']')){
+          const inner=o1.slice(1,-1).trim();
+          const addr=this._expr(inner);
+          if(addr!==null){this._emit(0x8D,0x06|(r<<3));this._emit16(addr)}
+        }break;}
+      default:if(this.pass===2)this._err(`Desconhecido: ${mn}`);break;
+    }
+  }
+
+  _mov(dst,src){
+    const d16=this._r16(dst),s16=this._r16(src);
+    const d8=this._r8(dst),s8=this._r8(src);
+    const dsr=this._sr(dst),ssr=this._sr(src);
+    if(dsr!==null&&s16!==null){this._emit(0x8E,0xC0|(dsr<<3)|s16);return}
+    if(d16!==null&&ssr!==null){this._emit(0x8C,0xC0|(ssr<<3)|d16);return}
+    if(d16!==null&&s16!==null){this._emit(0x89,0xC0|(s16<<3)|d16);return}
+    if(d8!==null&&s8!==null){this._emit(0x88,0xC0|(s8<<3)|d8);return}
+    if(d16!==null){
+      if(src.startsWith('[')&&src.endsWith(']')){
+        const inner=src.slice(1,-1).trim();
+        const ir=this._r16(inner);
+        if(ir!==null){this._emit(0x8B,(d16<<3)|ir);return}
+        const addr=this._expr(inner);if(addr!==null){this._emit(0x8B,0x06|(d16<<3));this._emit16(addr);return}
+      }
+      const n=this._expr(src);if(n!==null){this._emit(0xB8+d16,n&0xFF,(n>>8)&0xFF);return}
+    }
+    if(d8!==null){
+      if(src.startsWith('[')&&src.endsWith(']')){
+        const inner=src.slice(1,-1).trim();
+        const addr=this._expr(inner);if(addr!==null){this._emit(0x8A,0x06|(d8<<3));this._emit16(addr);return}
+      }
+      const n=this._expr(src);if(n!==null){this._emit(0xB0+d8,n&0xFF);return}
+    }
+    if(dst.startsWith('[')&&dst.endsWith(']')){
+      const inner=dst.slice(1,-1).trim();
+      const ir=this._r16(inner);
+      if(s16!==null){if(ir!==null){this._emit(0x89,(s16<<3)|ir);return}const addr=this._expr(inner);if(addr!==null){this._emit(0x89,0x06|(s16<<3));this._emit16(addr);return}}
+      if(s8!==null){if(ir!==null){this._emit(0x88,(s8<<3)|ir);return}const addr=this._expr(inner);if(addr!==null){this._emit(0x88,0x06|(s8<<3));this._emit16(addr);return}}
+    }
+    if(this.pass===2)this._err(`mov: ${dst},${src}`);
+  }
+
+  _alu(op8mr,op16mr,op8rm,op16rm,op8al,op16ax,rc,dst,src){
+    const d16=this._r16(dst),s16=this._r16(src);
+    const d8=this._r8(dst),s8=this._r8(src);
+    if(d16!==null&&s16!==null){this._emit(op16rm,0xC0|(s16<<3)|d16);return}
+    if(d8!==null&&s8!==null){this._emit(op8rm,0xC0|(s8<<3)|d8);return}
+    if(d16!==null){
+      const n=this._expr(src);if(n!==null){
+        if(n>=-128&&n<=127)this._emit(0x83,0xC0|(rc<<3)|d16,n&0xFF);
+        else if(d16===0){this._emit(op16ax);this._emit16(n)}
+        else{this._emit(0x81,0xC0|(rc<<3)|d16);this._emit16(n)}
+        return;}
+    }
+    if(d8!==null){
+      const n=this._expr(src);if(n!==null){
+        if(d8===0)this._emit(op8al,n&0xFF);
+        else this._emit(0x80,0xC0|(rc<<3)|d8,n&0xFF);
+        return;}
+    }
+    if(this.pass===2)this._err(`alu: ${dst},${src}`);
+  }
+
+  _shift(rc,dst,cnt){
+    const d16=this._r16(dst),d8=this._r8(dst);
+    const cl=cnt.toLowerCase()==='cl',one=!cnt||cnt==='1';
+    if(cl){if(d16!==null){this._emit(0xD3,0xC0|(rc<<3)|d16);return}if(d8!==null){this._emit(0xD2,0xC0|(rc<<3)|d8);return}}
+    else if(one){if(d16!==null){this._emit(0xD1,0xC0|(rc<<3)|d16);return}if(d8!==null){this._emit(0xD0,0xC0|(rc<<3)|d8);return}}
+    else{const n=this._expr(cnt);if(n!==null){if(d16!==null){this._emit(0xC1,0xC0|(rc<<3)|d16,n&0xFF);return}if(d8!==null){this._emit(0xC0,0xC0|(rc<<3)|d8,n&0xFF);return}}}
+  }
+  _jmp(t){if(this.pass===1){this._emit(0xE9,0,0);return}const v=this._expr(t);if(v===null){this._err(`jmp:${t}`);return}const r=v-(this.pc+3);this._emit(0xE9,r&0xFF,(r>>8)&0xFF)}
+  _jcc(op,t){if(this.pass===1){this._emit(op,0);return}const v=this._expr(t);if(v===null){this._err(`jcc:${t}`);return}const r=v-(this.pc+2);if(r<-128||r>127){this._err(`range:${t}`);return}this._emit(op,r&0xFF)}
+  _call(t){if(this.pass===1){this._emit(0xE8,0,0);return}const v=this._expr(t);if(v===null){this._err(`call:${t}`);return}const r=v-(this.pc+3);this._emit(0xE8,r&0xFF,(r>>8)&0xFF)}
+}
+
+// ═══════════════════════════════════════════════
+// EMULADOR x86 REAL MODE (pure JS, sem deps)
+// ═══════════════════════════════════════════════
+class CPU {
+  constructor(bin){
+    this.mem=new Uint8Array(0x100000); // 1MB
+    if(bin)this.mem.set(bin,0x7C00);
+    this.r=new Uint16Array(8); // AX CX DX BX SP BP SI DI
+    this.s=new Uint16Array(4); // ES CS SS DS
+    this.ip=0x7C00;
+    this.CF=0;this.ZF=0;this.SF=0;this.OF=0;this.PF=0;this.DF=0;
+    this.r[4]=0x7C00; // SP
+    this.halted=false;this.steps=0;
+    this.output='';
+  }
+  // Register shortcuts
+  get ax(){return this.r[0]}set ax(v){this.r[0]=v&0xFFFF}
+  get cx(){return this.r[1]}set cx(v){this.r[1]=v&0xFFFF}
+  get dx(){return this.r[2]}set dx(v){this.r[2]=v&0xFFFF}
+  get bx(){return this.r[3]}set bx(v){this.r[3]=v&0xFFFF}
+  get sp(){return this.r[4]}set sp(v){this.r[4]=v&0xFFFF}
+  get bp(){return this.r[5]}set bp(v){this.r[5]=v&0xFFFF}
+  get si(){return this.r[6]}set si(v){this.r[6]=v&0xFFFF}
+  get di(){return this.r[7]}set di(v){this.r[7]=v&0xFFFF}
+  get al(){return this.ax&0xFF}set al(v){this.ax=(this.ax&0xFF00)|(v&0xFF)}
+  get ah(){return(this.ax>>8)&0xFF}set ah(v){this.ax=(this.ax&0xFF)|((v&0xFF)<<8)}
+  get bl(){return this.bx&0xFF}set bl(v){this.bx=(this.bx&0xFF00)|(v&0xFF)}
+  get bh(){return(this.bx>>8)&0xFF}set bh(v){this.bx=(this.bx&0xFF)|((v&0xFF)<<8)}
+  get cl(){return this.cx&0xFF}set cl(v){this.cx=(this.cx&0xFF00)|(v&0xFF)}
+  get ch(){return(this.cx>>8)&0xFF}set ch(v){this.cx=(this.cx&0xFF)|((v&0xFF)<<8)}
+  get dl(){return this.dx&0xFF}set dl(v){this.dx=(this.dx&0xFF00)|(v&0xFF)}
+  get dh(){return(this.dx>>8)&0xFF}set dh(v){this.dx=(this.dx&0xFF)|((v&0xFF)<<8)}
+  // Memory
+  rb(a){return this.mem[a&0xFFFFF]}
+  rw(a){return this.mem[a&0xFFFFF]|(this.mem[(a+1)&0xFFFFF]<<8)}
+  wb(a,v){this.mem[a&0xFFFFF]=v&0xFF}
+  ww(a,v){this.mem[a&0xFFFFF]=v&0xFF;this.mem[(a+1)&0xFFFFF]=(v>>8)&0xFF}
+  // Stack
+  push(v){this.sp=(this.sp-2)&0xFFFF;this.ww(this.sp,v)}
+  pop(){const v=this.rw(this.sp);this.sp=(this.sp+2)&0xFFFF;return v}
+  // Fetch helpers
+  fb(){return this.rb(this.ip++)}
+  fw(){const v=this.rw(this.ip);this.ip+=2;return v}
+  fbs(){const v=this.fb();return v>=0x80?v-256:v}
+  fws(){const v=this.fw();return v>=0x8000?v-65536:v}
+  // ModRM
+  mrm(){const b=this.fb();return{mod:b>>6,reg:(b>>3)&7,rm:b&7}}
+  // Register 8/16 access by index
+  gr16(r){return this.r[r]}
+  sr16(r,v){this.r[r]=v&0xFFFF}
+  gr8(r){return r<4?this.r[r]&0xFF:(this.r[r-4]>>8)&0xFF}
+  sr8(r,v){v&=0xFF;if(r<4)this.r[r]=(this.r[r]&0xFF00)|v;else this.r[r-4]=(this.r[r-4]&0xFF)|(v<<8)}
+  // Effective address
+  ea(mod,rm){
+    let b;
+    switch(rm){
+      case 0:b=(this.bx+this.si)&0xFFFF;break;case 1:b=(this.bx+this.di)&0xFFFF;break;
+      case 2:b=(this.bp+this.si)&0xFFFF;break;case 3:b=(this.bp+this.di)&0xFFFF;break;
+      case 4:b=this.si;break;case 5:b=this.di;break;
+      case 6:b=mod===0?this.fw():this.bp;break;
+      case 7:b=this.bx;break;
+    }
+    if(mod===1)b=(b+this.fbs())&0xFFFF;
+    else if(mod===2)b=(b+this.fws())&0xFFFF;
+    return b;
+  }
+  // r/m helpers (compute EA once, return value + addr)
+  rmR8(mod,rm){if(mod===3)return{v:this.gr8(rm),a:-1};const a=this.ea(mod,rm);return{v:this.rb(a),a}}
+  rmR16(mod,rm){if(mod===3)return{v:this.gr16(rm),a:-1};const a=this.ea(mod,rm);return{v:this.rw(a),a}}
+  rmW8(mod,rm,a,v){if(mod===3)this.sr8(rm,v);else this.wb(a,v)}
+  rmW16(mod,rm,a,v){if(mod===3)this.sr16(rm,v);else this.ww(a,v)}
+  // Parity
+  _par(v){let p=0;v&=0xFF;while(v){p^=v&1;v>>=1}return p^1}
+  // ALU (op 0-7: ADD OR ADC SBB AND SUB XOR CMP)
+  alu(op,a,b,w){
+    const m=w===8?0xFF:0xFFFF,s=w===8?0x80:0x8000;
+    let r;
+    switch(op){
+      case 0:r=a+b;this.CF=r>m?1:0;break;
+      case 1:r=a|b;this.CF=0;break;
+      case 2:r=a+b+this.CF;this.CF=r>m?1:0;break;
+      case 3:r=a-b-this.CF;this.CF=r<0?1:0;break;
+      case 4:r=a&b;this.CF=0;break;
+      case 5:r=a-b;this.CF=a<b?1:0;break;
+      case 6:r=a^b;this.CF=0;break;
+      case 7:r=a-b;this.CF=a<b?1:0;break;
+      default:r=a;
+    }
+    r&=m;
+    this.ZF=r===0?1:0;this.SF=(r&s)?1:0;this.PF=this._par(r);
+    this.OF=(op===0||op===2)?(((a^r)&(b^r)&s)?1:0):(op===5||op===7||op===3)?(((a^b)&(a^r)&s)?1:0):0;
+    return r;
+  }
+  // Condition codes
+  cc(op){
+    switch(op&0xF){
+      case 0:return this.OF?1:0;case 1:return this.OF?0:1;
+      case 2:return this.CF?1:0;case 3:return this.CF?0:1;
+      case 4:return this.ZF?1:0;case 5:return this.ZF?0:1;
+      case 6:return(this.CF||this.ZF)?1:0;case 7:return(!this.CF&&!this.ZF)?1:0;
+      case 8:return this.SF?1:0;case 9:return this.SF?0:1;
+      case 10:return this.PF?1:0;case 11:return this.PF?0:1;
+      case 12:return(this.SF!==this.OF)?1:0;case 13:return(this.SF===this.OF)?1:0;
+      case 14:return(this.ZF||(this.SF!==this.OF))?1:0;
+      case 15:return(!this.ZF&&this.SF===this.OF)?1:0;
+    }
+    return 0;
+  }
+  // INT handler
+  handleINT(n){
+    if(n===0x10){
+      if(this.ah===0x0E){
+        const c=this.al;
+        if(c===13)this.output+='\r';
+        else if(c===10)this.output+='\n';
+        else if(c>=32&&c<127)this.output+=String.fromCharCode(c);
+      }else if(this.ah===0){
+        this.output=''; // set video mode = clear
+      }
+    }
+  }
+  // Execute one instruction
+  step(){
+    if(this.halted)return;
+    if(++this.steps>600000){this.halted=true;this.output+='\n[MAX STEPS]';return}
+    const op=this.fb();
+    switch(op){
+      // Simple 1-byte
+      case 0x90:break;
+      case 0xF4:this.halted=true;return;
+      case 0xFA:case 0xFB:break; // CLI STI
+      case 0xF8:case 0xF9:break; // CLC STC
+      case 0xFC:this.DF=0;break; // CLD
+      case 0xFD:this.DF=1;break; // STD
+      case 0xC3:this.ip=this.pop();return;
+      case 0xCB:{this.ip=this.pop();this.s[1]=this.pop();return}
+      case 0xCF:{this.ip=this.pop();this.s[1]=this.pop();break} // IRET simplified
+      case 0x60:{const sp0=this.sp;for(let i=0;i<8;i++)this.push(i===4?sp0:this.r[i]);return}
+      case 0x61:{for(let i=7;i>=0;i--)this.sr16(i,this.pop());return} // POPA simplified
+      case 0x9C:this.push(this.CF|(this.PF<<2)|(this.ZF<<6)|(this.SF<<7)|(this.OF<<11));return;
+      case 0x9D:{const f=this.pop();this.CF=f&1;this.PF=(f>>2)&1;this.ZF=(f>>6)&1;this.SF=(f>>7)&1;this.OF=(f>>11)&1;return}
+      case 0x98:this.ax=this.al<0x80?this.al:(0xFF00|this.al);return;
+      case 0x99:this.dx=this.ax&0x8000?0xFFFF:0;return;
+      // String ops
+      case 0xAC:this.al=this.rb(this.si);this.si=(this.si+(this.DF?-1:1))&0xFFFF;return;
+      case 0xAD:this.ax=this.rw(this.si);this.si=(this.si+(this.DF?-2:2))&0xFFFF;return;
+      case 0xAA:this.wb(this.di,this.al);this.di=(this.di+(this.DF?-1:1))&0xFFFF;return;
+      case 0xAB:this.ww(this.di,this.ax);this.di=(this.di+(this.DF?-2:2))&0xFFFF;return;
+      case 0xA4:this.wb(this.di,this.rb(this.si));this.si=(this.si+1)&0xFFFF;this.di=(this.di+1)&0xFFFF;return;
+      case 0xAE:{const b=this.rb(this.di);this.di=(this.di+(this.DF?-1:1))&0xFFFF;this.alu(7,this.al,b,8);return}
+      // INT
+      case 0xCD:this.handleINT(this.fb());return;
+      case 0xCC:this.handleINT(3);return;
+      // PUSH r16
+      case 0x50:case 0x51:case 0x52:case 0x53:
+      case 0x54:case 0x55:case 0x56:case 0x57:this.push(this.r[op-0x50]);return;
+      // POP r16
+      case 0x58:case 0x59:case 0x5A:case 0x5B:
+      case 0x5C:case 0x5D:case 0x5E:case 0x5F:this.sr16(op-0x58,this.pop());return;
+      // PUSH imm
+      case 0x68:this.push(this.fw());return;
+      case 0x6A:this.push(this.fbs()&0xFFFF);return;
+      // INC r16
+      case 0x40:case 0x41:case 0x42:case 0x43:
+      case 0x44:case 0x45:case 0x46:case 0x47:{const rr=op-0x40;this.sr16(rr,this.alu(0,this.r[rr],1,16));return}
+      // DEC r16
+      case 0x48:case 0x49:case 0x4A:case 0x4B:
+      case 0x4C:case 0x4D:case 0x4E:case 0x4F:{const rr=op-0x48;this.sr16(rr,this.alu(5,this.r[rr],1,16));return}
+      // MOV r8, imm8
+      case 0xB0:case 0xB1:case 0xB2:case 0xB3:
+      case 0xB4:case 0xB5:case 0xB6:case 0xB7:this.sr8(op-0xB0,this.fb());return;
+      // MOV r16, imm16
+      case 0xB8:case 0xB9:case 0xBA:case 0xBB:
+      case 0xBC:case 0xBD:case 0xBE:case 0xBF:this.sr16(op-0xB8,this.fw());return;
+      // XCHG r16,AX
+      case 0x91:case 0x92:case 0x93:case 0x94:
+      case 0x95:case 0x96:case 0x97:{const rr=op-0x90;const t=this.ax;this.ax=this.r[rr];this.sr16(rr,t);return}
+      // JMP
+      case 0xEB:{const r=this.fbs();this.ip=(this.ip+r)&0xFFFF;return}
+      case 0xE9:{const r=this.fws();this.ip=(this.ip+r)&0xFFFF;return}
+      case 0xEA:{this.ip=this.fw();this.s[1]=this.fw();return} // JMP far
+      case 0xE8:{const r=this.fws();this.push(this.ip);this.ip=(this.ip+r)&0xFFFF;return}
+      // Jcc short
+      case 0x70:case 0x71:case 0x72:case 0x73:case 0x74:case 0x75:case 0x76:case 0x77:
+      case 0x78:case 0x79:case 0x7A:case 0x7B:case 0x7C:case 0x7D:case 0x7E:case 0x7F:{
+        const r=this.fbs();if(this.cc(op))this.ip=(this.ip+r)&0xFFFF;return}
+      // JCXZ / LOOP
+      case 0xE3:{const r=this.fbs();if(this.cx===0)this.ip=(this.ip+r)&0xFFFF;return}
+      case 0xE2:{const r=this.fbs();this.cx=(this.cx-1)&0xFFFF;if(this.cx!==0)this.ip=(this.ip+r)&0xFFFF;return}
+      case 0xE1:{const r=this.fbs();this.cx=(this.cx-1)&0xFFFF;if(this.cx!==0&&this.ZF)this.ip=(this.ip+r)&0xFFFF;return}
+      case 0xE0:{const r=this.fbs();this.cx=(this.cx-1)&0xFFFF;if(this.cx!==0&&!this.ZF)this.ip=(this.ip+r)&0xFFFF;return}
+      // MOV variants
+      case 0x89:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR16(mod,rm);this.rmW16(mod,rm,a,this.gr16(reg));return}
+      case 0x8B:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR16(mod,rm);this.sr16(reg,v);return}
+      case 0x88:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR8(mod,rm);this.rmW8(mod,rm,a,this.gr8(reg));return}
+      case 0x8A:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR8(mod,rm);this.sr8(reg,v);return}
+      case 0x8E:{const{mod,reg,rm}=this.mrm();const{v}=this.rmR16(mod,rm);this.s[reg]=v;return}
+      case 0x8C:{const{mod,reg,rm}=this.mrm();this.rmW16(mod,rm,mod!==3?this.ea(mod,rm):-1,this.s[reg]);return}
+      case 0x8D:{const{mod,reg,rm}=this.mrm();this.sr16(reg,this.ea(mod,rm));return}
+      // MOV mem (A0-A3)
+      case 0xA0:{const a=this.fw();this.al=this.rb(a);return}
+      case 0xA1:{const a=this.fw();this.ax=this.rw(a);return}
+      case 0xA2:{const a=this.fw();this.wb(a,this.al);return}
+      case 0xA3:{const a=this.fw();this.ww(a,this.ax);return}
+      // ALU reg, r/m (00..3D)
+      case 0x00:case 0x01:case 0x02:case 0x03:
+      case 0x08:case 0x09:case 0x0A:case 0x0B:
+      case 0x10:case 0x11:case 0x12:case 0x13:
+      case 0x18:case 0x19:case 0x1A:case 0x1B:
+      case 0x20:case 0x21:case 0x22:case 0x23:
+      case 0x28:case 0x29:case 0x2A:case 0x2B:
+      case 0x30:case 0x31:case 0x32:case 0x33:
+      case 0x38:case 0x39:case 0x3A:case 0x3B:{
+        const w=op&1,d=(op>>1)&1,opc=(op&0x38)>>3;
+        const{mod,reg,rm}=this.mrm();
+        if(w===0){const{v,a}=this.rmR8(mod,rm);const sv=this.gr8(reg);const r=this.alu(opc,d?sv:v,d?v:sv,8);if(opc!==7)this.rmW8(mod,rm,a,d?r:r);}
+        else{const{v,a}=this.rmR16(mod,rm);const sv=this.gr16(reg);const r=this.alu(opc,d?sv:v,d?v:sv,16);if(opc!==7){if(d)this.sr16(reg,r);else this.rmW16(mod,rm,a,r);}}
+        return;}
+      // ALU AL/AX, imm
+      case 0x04:this.al=this.alu(0,this.al,this.fb(),8);return;
+      case 0x05:this.ax=this.alu(0,this.ax,this.fw(),16);return;
+      case 0x0C:this.al=this.alu(1,this.al,this.fb(),8);return;
+      case 0x0D:this.ax=this.alu(1,this.ax,this.fw(),16);return;
+      case 0x14:this.al=this.alu(2,this.al,this.fb(),8);return;
+      case 0x15:this.ax=this.alu(2,this.ax,this.fw(),16);return;
+      case 0x1C:this.al=this.alu(3,this.al,this.fb(),8);return;
+      case 0x1D:this.ax=this.alu(3,this.ax,this.fw(),16);return;
+      case 0x24:this.al=this.alu(4,this.al,this.fb(),8);return;
+      case 0x25:this.ax=this.alu(4,this.ax,this.fw(),16);return;
+      case 0x2C:this.al=this.alu(5,this.al,this.fb(),8);return;
+      case 0x2D:this.ax=this.alu(5,this.ax,this.fw(),16);return;
+      case 0x34:this.al=this.alu(6,this.al,this.fb(),8);return;
+      case 0x35:this.ax=this.alu(6,this.ax,this.fw(),16);return;
+      case 0x3C:this.alu(7,this.al,this.fb(),8);return;
+      case 0x3D:this.alu(7,this.ax,this.fw(),16);return;
+      // TEST
+      case 0x84:{const{mod,reg,rm}=this.mrm();const{v}=this.rmR8(mod,rm);this.alu(4,v,this.gr8(reg),8);return}
+      case 0x85:{const{mod,reg,rm}=this.mrm();const{v}=this.rmR16(mod,rm);this.alu(4,v,this.gr16(reg),16);return}
+      case 0xA8:this.alu(4,this.al,this.fb(),8);return;
+      case 0xA9:this.alu(4,this.ax,this.fw(),16);return;
+      // Immediate group 80/81/83
+      case 0x80:{const{mod,reg,rm}=this.mrm();const imm=this.fb();const{v,a}=this.rmR8(mod,rm);const r=this.alu(reg,v,imm,8);if(reg!==7)this.rmW8(mod,rm,a,r);return}
+      case 0x81:{const{mod,reg,rm}=this.mrm();const imm=this.fw();const{v,a}=this.rmR16(mod,rm);const r=this.alu(reg,v,imm,16);if(reg!==7)this.rmW16(mod,rm,a,r);return}
+      case 0x83:{const{mod,reg,rm}=this.mrm();const imm=this.fbs();const{v,a}=this.rmR16(mod,rm);const r=this.alu(reg,v,imm&0xFFFF,16);if(reg!==7)this.rmW16(mod,rm,a,r);return}
+      // Shift group C0/C1/D0/D1/D2/D3
+      case 0xC0:{const{mod,reg,rm}=this.mrm();const cnt=this.fb()&0x1F;const{v,a}=this.rmR8(mod,rm);this.rmW8(mod,rm,a,this._sh(reg,v,cnt,8));return}
+      case 0xC1:{const{mod,reg,rm}=this.mrm();const cnt=this.fb()&0x1F;const{v,a}=this.rmR16(mod,rm);this.rmW16(mod,rm,a,this._sh(reg,v,cnt,16));return}
+      case 0xD0:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR8(mod,rm);this.rmW8(mod,rm,a,this._sh(reg,v,1,8));return}
+      case 0xD1:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR16(mod,rm);this.rmW16(mod,rm,a,this._sh(reg,v,1,16));return}
+      case 0xD2:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR8(mod,rm);this.rmW8(mod,rm,a,this._sh(reg,v,this.cl,8));return}
+      case 0xD3:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR16(mod,rm);this.rmW16(mod,rm,a,this._sh(reg,v,this.cl,16));return}
+      // NOT/NEG/MUL/DIV F6/F7
+      case 0xF6:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR8(mod,rm);
+        if(reg<=1){this.alu(4,v,this.fb(),8);}
+        else if(reg===2)this.rmW8(mod,rm,a,(~v)&0xFF);
+        else if(reg===3){const r=(0-v)&0xFF;this.CF=r?1:0;this.rmW8(mod,rm,a,r);}
+        else if(reg===4){this.ax=(this.al*v)&0xFFFF;}
+        return;}
+      case 0xF7:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR16(mod,rm);
+        if(reg<=1){this.alu(4,v,this.fw(),16);}
+        else if(reg===2)this.rmW16(mod,rm,a,(~v)&0xFFFF);
+        else if(reg===3){const r=(0-v)&0xFFFF;this.CF=r?1:0;this.rmW16(mod,rm,a,r);}
+        else if(reg===4){const res=(this.ax*v)>>>0;this.ax=res&0xFFFF;this.dx=(res>>16)&0xFFFF;}
+        else if(reg===6){if(v){this.ax=Math.trunc(this.ax/v)&0xFFFF;this.dx=this.ax%v;}}
+        return;}
+      // INC/DEC r/m FE/FF
+      case 0xFE:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR8(mod,rm);
+        if(reg===0)this.rmW8(mod,rm,a,this.alu(0,v,1,8));
+        else if(reg===1)this.rmW8(mod,rm,a,this.alu(5,v,1,8));
+        return;}
+      case 0xFF:{const{mod,reg,rm}=this.mrm();const{v,a}=this.rmR16(mod,rm);
+        if(reg===0)this.rmW16(mod,rm,a,this.alu(0,v,1,16));
+        else if(reg===1)this.rmW16(mod,rm,a,this.alu(5,v,1,16));
+        else if(reg===2){this.push(this.ip);this.ip=v;}
+        else if(reg===4){this.ip=v;}
+        else if(reg===6)this.push(v);
+        return;}
+      // IN/OUT (ignore)
+      case 0xE4:case 0xE5:this.fb();return;
+      case 0xE6:case 0xE7:this.fb();return;
+      case 0xEC:case 0xED:case 0xEE:case 0xEF:return;
+      // CBW/CWD extra
+      case 0xD7:return; // XLAT
+      // Unknown: stop if in padding area
+      default:if(this.ip>0x7E10)this.halted=true;break;
+    }
+  }
+  _sh(op,v,cnt,bits){
+    if(!cnt)return v;
+    const m=bits===8?0xFF:0xFFFF,b=bits===8?0x80:0x8000;
+    for(let i=0;i<cnt;i++){
+      switch(op){
+        case 0:{const c=(v&b)?1:0;this.CF=c;v=((v<<1)&m)|(c?1:0);break} // ROL
+        case 1:{const c=v&1;v=((v>>>1)|((this.CF?b:0)))&m;this.CF=c;break} // ROR with carry... actually:
+        // ROL: top bit rotates to bit0 (no carry flag involvement)
+        // ROR: bit0 rotates to top bit
+        // Let me fix:
+      }
+      // Override with correct implementation
+      if(op===0){const c=(v&b)?1:0;this.CF=c;v=((v<<1)&m)|(c?1:0)} // ROL
+      else if(op===1){const c=v&1;this.CF=c;v=((v>>>1)|(c?b:0))&m} // ROR
+      else if(op===2){const c=(v&b)?1:0;v=((v<<1)&m)|this.CF;this.CF=c} // RCL
+      else if(op===3){const c=v&1;v=((v>>>1)|(this.CF?b:0))&m;this.CF=c} // RCR
+      else if(op===4||op===6){this.CF=(v&b)?1:0;v=(v<<1)&m} // SHL/SAL
+      else if(op===5){this.CF=v&1;v=(v>>>1)&m} // SHR
+      else if(op===7){this.CF=v&1;v=((v>>>1)|(v&b))&m} // SAR
+    }
+    this.ZF=(v===0)?1:0;this.SF=(v&b)?1:0;
+    return v;
+  }
+}
+
+// ═══════════════════════════════════════════════
+// UI
+// ═══════════════════════════════════════════════
+const codeEl=document.getElementById('code');
+const langSel=document.getElementById('lang-sel');
+const editorEl=document.getElementById('editor');
+const hexOutEl=document.getElementById('hex-out');
+const msgEl=document.getElementById('msg');
+const szEl=document.getElementById('sz');
+const projectNameEl=document.getElementById('project-name');
+const fileMenuEl=document.getElementById('file-menu');
+const fileMenuBtn=document.getElementById('file-menu-btn');
+const btnOpen=document.getElementById('btn-open');
+const btnSaveSource=document.getElementById('btn-save-source');
+const btnSaveLocal=document.getElementById('btn-save-local');
+const btnSaveAs=document.getElementById('btn-save-as');
+const btnCredits=document.getElementById('btn-credits');
+const savedSel=document.getElementById('saved-sel');
+const btnLoadSaved=document.getElementById('btn-load-saved');
+const btnDeleteSaved=document.getElementById('btn-delete-saved');
+const fileOpenInput=document.getElementById('file-open-input');
+const btnRun=document.getElementById('btn-run');
+const btnDownload=document.getElementById('btn-download');
+const exSel=document.getElementById('ex-sel');
+const rlabelEl=document.getElementById('rlabel');
+const pillEl=document.getElementById('pill');
+const v86WrapEl=document.getElementById('v86-wrap');
+const v86ScreenEl=document.getElementById('v86-screen-container');
+const creditsModalEl=document.getElementById('credits-modal');
+const creditsTitleEl=document.getElementById('credits-title');
+const creditsTextEl=document.getElementById('credits-text');
+const creditsListEl=document.getElementById('credits-list');
+const creditsCloseEl=document.getElementById('credits-close');
+let lastAssembledImage=null;
+let currentLang=localStorage.getItem('asm-boot-studio.lang')||'pt-BR';
+let v86Emulator=null;
+let asmEditor=null;
+let currentProjectId=null;
+const LEGACY_PROJECTS_KEY='asm-boot-studio.projects.v1';
+const LEGACY_DRAFT_KEY='asm-boot-studio.draft.v1';
+const DB_NAME='asm-boot-studio';
+const DB_VERSION=1;
+const PROJECT_STORE='projects';
+const META_STORE='meta';
+let dbPromise=null;
+
+function t(key){
+  return I18N[currentLang][key];
+}
+
+function setMsg(t,c='info'){msgEl.textContent=t;msgEl.className=c}
+
+function resetImageDownload(){
+  lastAssembledImage=null;
+  btnDownload.disabled=true;
+}
+
+function getEditorCode(){
+  return asmEditor?asmEditor.getValue():codeEl.value;
+}
+
+function setEditorCode(code){
+  const value=code||'';
+  codeEl.value=value;
+  if(asmEditor)asmEditor.setValue(value);
+}
+
+function closeFileMenu(){
+  fileMenuEl.classList.remove('open');
+}
+
+function toggleFileMenu(){
+  fileMenuEl.classList.toggle('open');
+}
+
+function renderCredits(){
+  creditsTitleEl.textContent=t('creditsTitle');
+  creditsTextEl.textContent=t('creditsIntro');
+  creditsCloseEl.textContent=t('close');
+  const authorCard=`<div class="credit-item"><h3>${t('authorTitle')}</h3><p>${t('authorRole')}: ${PROJECT_AUTHOR.name}<br>${PROJECT_AUTHOR.role}</p><a href="mailto:${PROJECT_AUTHOR.email}">${PROJECT_AUTHOR.email}</a></div>`;
+  const projectCards=CREDITS.map(item=>{
+    const desc=item.desc[currentLang]||item.desc['en'];
+    return `<div class="credit-item"><h3>${item.name}</h3><p>${desc}</p><a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.url}</a></div>`;
+  }).join('');
+  creditsListEl.innerHTML=authorCard+projectCards;
+}
+
+function openCredits(){
+  closeFileMenu();
+  renderCredits();
+  creditsModalEl.classList.add('open');
+  creditsModalEl.setAttribute('aria-hidden','false');
+}
+
+function closeCredits(){
+  creditsModalEl.classList.remove('open');
+  creditsModalEl.setAttribute('aria-hidden','true');
+}
+
+function openDb(){
+  if(dbPromise)return dbPromise;
+  dbPromise=new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME,DB_VERSION);
+    req.onupgradeneeded=event=>{
+      const db=event.target.result;
+      if(!db.objectStoreNames.contains(PROJECT_STORE)){
+        const store=db.createObjectStore(PROJECT_STORE,{keyPath:'id'});
+        store.createIndex('updatedAt','updatedAt');
+      }
+      if(!db.objectStoreNames.contains(META_STORE)){
+        db.createObjectStore(META_STORE,{keyPath:'key'});
+      }
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error||new Error('IndexedDB error'));
+  });
+  return dbPromise;
+}
+
+async function idbGet(storeName,key){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(storeName,'readonly');
+    const req=tx.objectStore(storeName).get(key);
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+
+async function idbGetAll(storeName){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(storeName,'readonly');
+    const req=tx.objectStore(storeName).getAll();
+    req.onsuccess=()=>resolve(req.result||[]);
+    req.onerror=()=>reject(req.error);
+  });
+}
+
+async function idbPut(storeName,value){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(storeName,'readwrite');
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+    tx.objectStore(storeName).put(value);
+  });
+}
+
+async function idbDelete(storeName,key){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(storeName,'readwrite');
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+    tx.objectStore(storeName).delete(key);
+  });
+}
+
+function normalizeProjectName(name){
+  return (name||'').trim()||'boot';
+}
+
+function sourceFilename(){
+  return normalizeProjectName(projectNameEl.value).replace(/[\\/:*?"<>|]+/g,'-')+'.asm';
+}
+
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;
+  link.download=name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function readProjects(){
+  const list=await idbGetAll(PROJECT_STORE);
+  return Array.isArray(list)?list:[];
+}
+
+async function saveProjectRecord(project){
+  await idbPut(PROJECT_STORE,project);
+}
+
+async function saveDraft(){
+  await idbPut(META_STORE,{
+    key:'draft',
+    code:getEditorCode(),
+    projectName:normalizeProjectName(projectNameEl.value),
+    currentProjectId
+  });
+}
+
+async function loadDraft(){
+  try{
+    const draft=await idbGet(META_STORE,'draft');
+    if(!draft)return false;
+    if(typeof draft.code==='string')setEditorCode(draft.code);
+    projectNameEl.value=normalizeProjectName(draft.projectName||'boot');
+    currentProjectId=typeof draft.currentProjectId==='string'?draft.currentProjectId:null;
+    return true;
+  }catch{
+    return false;
+  }
+}
+
+async function refreshSavedList(){
+  const projects=(await readProjects()).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  const selected=currentProjectId;
+  savedSel.innerHTML='';
+  if(!projects.length){
+    const opt=document.createElement('option');
+    opt.value='';
+    opt.textContent=t('noSaved');
+    savedSel.appendChild(opt);
+  }else{
+    for(const project of projects){
+      const opt=document.createElement('option');
+      opt.value=project.id;
+      opt.textContent=project.name;
+      savedSel.appendChild(opt);
+    }
+    if(selected&&projects.some(p=>p.id===selected))savedSel.value=selected;
+  }
+  const hasSelection=!!savedSel.value;
+  btnLoadSaved.disabled=!hasSelection;
+  btnDeleteSaved.disabled=!hasSelection;
+}
+
+function replaceEditorCode(code){
+  setEditorCode(code);
+  resetImageDownload();
+  destroyV86();
+}
+
+async function saveCurrentProject(){
+  const now=Date.now();
+  const name=normalizeProjectName(projectNameEl.value);
+  const id=currentProjectId||`project-${now}`;
+  const record={id,name,code:getEditorCode(),updatedAt:now};
+  currentProjectId=id;
+  projectNameEl.value=name;
+  await saveProjectRecord(record);
+  await saveDraft();
+  await refreshSavedList();
+  setMsg('✅ '+t('saveDone'),'ok');
+}
+
+async function saveAsNewProject(){
+  currentProjectId=null;
+  await saveCurrentProject();
+  setMsg('✅ '+t('saveAsDone'),'ok');
+}
+
+async function loadSavedProject(id){
+  const project=await idbGet(PROJECT_STORE,id);
+  if(!project){
+    setMsg('⚠️ '+t('chooseSaved'),'warn');
+    return;
+  }
+  currentProjectId=project.id;
+  projectNameEl.value=normalizeProjectName(project.name);
+  replaceEditorCode(project.code||'');
+  hexOutEl.textContent=t('hexPlaceholder');
+  hexOutEl.style.color='#484f58';
+  szEl.textContent='';
+  await saveDraft();
+  await refreshSavedList();
+  setMsg('✅ '+t('loadDone'),'ok');
+}
+
+async function deleteSavedProject(id){
+  if(!id){
+    setMsg('⚠️ '+t('chooseSaved'),'warn');
+    return;
+  }
+  if(!confirm(t('askDelete')))return;
+  await idbDelete(PROJECT_STORE,id);
+  if(currentProjectId===id)currentProjectId=null;
+  await saveDraft();
+  await refreshSavedList();
+  setMsg('✅ '+t('deleteDone'),'ok');
+}
+
+async function migrateLegacyLocalStorage(){
+  try{
+    const migrated=await idbGet(META_STORE,'legacy-migrated');
+    if(migrated)return;
+    const rawProjects=localStorage.getItem(LEGACY_PROJECTS_KEY);
+    const rawDraft=localStorage.getItem(LEGACY_DRAFT_KEY);
+    const projects=rawProjects?JSON.parse(rawProjects):[];
+    if(Array.isArray(projects)){
+      for(const project of projects){
+        if(project&&project.id)await saveProjectRecord(project);
+      }
+    }
+    if(rawDraft){
+      const draft=JSON.parse(rawDraft);
+      await idbPut(META_STORE,{key:'draft',...draft});
+    }
+    await idbPut(META_STORE,{key:'legacy-migrated',value:true});
+  }catch{}
+}
+
+function updateExampleLabels(){
+  const labels=t('exampleLabels');
+  for(const option of exSel.options)option.textContent=labels[option.value]||option.value;
+}
+
+function resetV86Screen(){
+  v86ScreenEl.innerHTML='<div></div><canvas></canvas>';
+}
+
+async function destroyV86(){
+  if(!v86Emulator)return;
+  const vm=v86Emulator;
+  v86Emulator=null;
+  try{await vm.stop()}catch{}
+  try{await vm.destroy()}catch{}
+  resetV86Screen();
+}
+
+function updateStaticTexts(){
+  document.documentElement.lang=I18N[currentLang].htmlLang;
+  projectNameEl.placeholder=t('projectNamePlaceholder');
+  fileMenuBtn.textContent=t('fileMenu');
+  btnOpen.textContent=t('open');
+  btnSaveSource.textContent=t('saveSource');
+  btnSaveLocal.textContent=t('saveLocal');
+  btnSaveAs.textContent=t('saveAs');
+  btnCredits.textContent=t('credits');
+  btnLoadSaved.textContent=t('loadSaved');
+  btnDeleteSaved.textContent=t('deleteSaved');
+  btnRun.textContent=t('run');
+  btnDownload.textContent=t('download');
+  pillEl.textContent=t('pill');
+  rlabelEl.textContent=t('outputLabel');
+  renderCredits();
+  hexOutEl.textContent=hexOutEl.style.color==='rgb(72, 79, 88)'||hexOutEl.style.color==='#484f58'?t('hexPlaceholder'):hexOutEl.textContent;
+  if(msgEl.className==='info'&&(!msgEl.textContent||msgEl.textContent===I18N['pt-BR'].initialMsg||msgEl.textContent===I18N.en.initialMsg||msgEl.textContent===I18N['zh-CN'].initialMsg))setMsg(t('initialMsg'),'info');
+  updateExampleLabels();
+  if(!lastAssembledImage)szEl.textContent='';
+  refreshSavedList();
+}
+
+function setLanguage(lang){
+  currentLang=I18N[lang]?lang:'pt-BR';
+  langSel.value=currentLang;
+  localStorage.setItem('asm-boot-studio.lang',currentLang);
+  updateStaticTexts();
+}
+
+function v86BufferFromBytes(bytes){
+  return bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
+}
+
+const FLOPPY_1440_SIZE=1474560;
+
+function floppyImageFromBytes(bytes){
+  const size=Math.max(bytes.length,FLOPPY_1440_SIZE);
+  const image=new Uint8Array(size);
+  image.set(bytes);
+  return image;
+}
+
+async function runInV86(result){
+  if(typeof V86==='undefined')throw new Error('v86 nao esta disponivel.');
+  await destroyV86();
+  resetV86Screen();
+  v86WrapEl.style.display='block';
+  setMsg(t('v86Booting'),'info');
+  v86Emulator=new V86({
+    wasm_path:'./vendor/v86/v86.wasm',
+    memory_size:32*1024*1024,
+    vga_memory_size:8*1024*1024,
+    screen_container:v86ScreenEl,
+    bios:{url:'./vendor/v86/seabios.bin'},
+    vga_bios:{url:'./vendor/v86/vgabios.bin'},
+    fda:{buffer:v86BufferFromBytes(floppyImageFromBytes(result))},
+    boot_order:0x231,
+    autostart:true,
+  });
+  v86Emulator.add_listener('emulator-ready',()=>{
+    setMsg('✅ '+t('v86Ready'),'ok');
+  });
+}
+
+function sourceOrg(src){
+  const m=src.match(/^\s*org\s+([^\s;]+)/im);
+  if(!m)return 0x7C00;
+  const raw=m[1].trim().toLowerCase();
+  if(raw.startsWith('0x'))return parseInt(raw,16);
+  if(raw.endsWith('h'))return parseInt(raw.slice(0,-1),16);
+  const n=parseInt(raw,10);
+  return Number.isFinite(n)?n:0x7C00;
+}
+
+let nasmWorker;
+let wasmJobId=0;
+const wasmPending=new Map();
+
+function getNasmWorker(){
+  if(!nasmWorker){
+    nasmWorker=new Worker('./nasm-worker.js');
+    nasmWorker.addEventListener('message',event=>{
+      const msg=event.data;
+      const pending=wasmPending.get(msg.id);
+      if(!pending)return;
+      wasmPending.delete(msg.id);
+      if(msg.ok)pending.resolve(new Uint8Array(msg.bytes));
+      else pending.reject(new Error(msg.error||'Falha ao montar com NASM WASM.'));
+    });
+  }
+  return nasmWorker;
+}
+
+function assembleWithWasm(source){
+  return new Promise((resolve,reject)=>{
+    const id=++wasmJobId;
+    wasmPending.set(id,{resolve,reject});
+    getNasmWorker().postMessage({id,source});
+  });
+}
+
+function initEditor(){
+  if(!globalThis.AsmEditorBundle?.createAsmEditor){
+    codeEl.style.display='block';
+    codeEl.style.width='100%';
+    codeEl.style.height='100%';
+    codeEl.style.background='#0d1117';
+    codeEl.style.color='#e6edf3';
+    codeEl.style.border='0';
+    codeEl.style.outline='0';
+    codeEl.addEventListener('input',()=>{resetImageDownload();saveDraft()});
+    return;
+  }
+  asmEditor=AsmEditorBundle.createAsmEditor({
+    parent:editorEl,
+    doc:codeEl.value,
+    onChange:value=>{
+      codeEl.value=value;
+      resetImageDownload();
+      saveDraft();
+    }
+  });
+}
+
+exSel.addEventListener('change',()=>{
+  currentProjectId=null;
+  setEditorCode(EXAMPLES[exSel.value]||'');
+  projectNameEl.value=exSel.value;
+  setMsg(t('exampleLoaded'),'info');
+  hexOutEl.textContent=t('hexPlaceholder');
+  hexOutEl.style.color='#484f58';
+  szEl.textContent='';
+  resetImageDownload();
+  destroyV86();
+  saveDraft();
+  refreshSavedList();
+});
+
+langSel.addEventListener('change',()=>setLanguage(langSel.value));
+fileMenuBtn.addEventListener('click',event=>{
+  event.stopPropagation();
+  toggleFileMenu();
+});
+document.addEventListener('click',event=>{
+  if(!fileMenuEl.contains(event.target))closeFileMenu();
+});
+projectNameEl.addEventListener('input',saveDraft);
+btnOpen.addEventListener('click',()=>{closeFileMenu();fileOpenInput.click()});
+btnSaveSource.addEventListener('click',()=>{
+  closeFileMenu();
+  downloadBlob(new Blob([getEditorCode()],{type:'text/plain;charset=utf-8'}),sourceFilename());
+});
+btnSaveLocal.addEventListener('click',()=>{closeFileMenu();saveCurrentProject()});
+btnSaveAs.addEventListener('click',()=>{closeFileMenu();saveAsNewProject()});
+btnCredits.addEventListener('click',openCredits);
+btnLoadSaved.addEventListener('click',()=>loadSavedProject(savedSel.value));
+btnDeleteSaved.addEventListener('click',()=>deleteSavedProject(savedSel.value));
+creditsCloseEl.addEventListener('click',closeCredits);
+creditsModalEl.addEventListener('click',event=>{
+  if(event.target===creditsModalEl)closeCredits();
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&creditsModalEl.classList.contains('open'))closeCredits();
+});
+savedSel.addEventListener('change',()=>{
+  const hasSelection=!!savedSel.value;
+  btnLoadSaved.disabled=!hasSelection;
+  btnDeleteSaved.disabled=!hasSelection;
+});
+fileOpenInput.addEventListener('change',async()=>{
+  const file=fileOpenInput.files&&fileOpenInput.files[0];
+  if(!file)return;
+  try{
+    const text=await file.text();
+    currentProjectId=null;
+    projectNameEl.value=file.name.replace(/\.[^.]+$/,'')||'boot';
+    replaceEditorCode(text);
+    hexOutEl.textContent=t('hexPlaceholder');
+    hexOutEl.style.color='#484f58';
+    szEl.textContent='';
+    await saveDraft();
+    await refreshSavedList();
+    setMsg('✅ '+t('openedFile'),'ok');
+  }catch{
+    setMsg('❌ '+t('readFail'),'err');
+  }finally{
+    fileOpenInput.value='';
+  }
+});
+
+async function initLocalProjects(){
+  await migrateLegacyLocalStorage();
+  if(!await loadDraft()){
+    setEditorCode(EXAMPLES.hello);
+    projectNameEl.value='hello';
+  }
+  initEditor();
+  setLanguage(currentLang);
+  await refreshSavedList();
+}
+
+initLocalProjects().catch(()=>{
+  setEditorCode(EXAMPLES.hello);
+  projectNameEl.value='hello';
+  initEditor();
+  setLanguage(currentLang);
+  setMsg('⚠️ IndexedDB indisponivel. Usando apenas a sessao atual.','warn');
+});
+
+btnDownload.addEventListener('click',()=>{
+  if(!lastAssembledImage)return;
+  closeFileMenu();
+  downloadBlob(new Blob([lastAssembledImage],{type:'application/octet-stream'}),'boot.img');
+});
+
+btnRun.addEventListener('click',async()=>{
+  setMsg(t('assembling'),'info');
+  btnRun.disabled=true;
+  btnDownload.disabled=true;
+
+  let result;
+  const source=getEditorCode();
+  const org=sourceOrg(source);
+  try{
+    result=await assembleWithWasm(source);
+  }catch(err){
+    setMsg('❌ '+err.message,'err');
+    hexOutEl.textContent=err.message;
+    hexOutEl.style.color='#f85149';
+    szEl.textContent='';
+    btnRun.disabled=false;
+    resetImageDownload();
+    return;
+  }
+
+  lastAssembledImage=result.slice();
+  btnDownload.disabled=false;
+
+  // Hex dump
+  hexOutEl.style.color='#3fb950';
+  const lines=[];
+  for(let i=0;i<Math.min(result.length,512);i+=16){
+    const addr=(org+i).toString(16).padStart(4,'0').toUpperCase();
+    const hex=Array.from(result.slice(i,i+16)).map(b=>b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+    lines.push(addr+': '+hex);
+  }
+  hexOutEl.textContent=lines.join('\n');
+  szEl.textContent=result.length+' '+t('bytes');
+
+  const sig=(result[511]<<8)|result[510];
+  const sigOk=sig===0xAA55;
+  setMsg('✅ '+result.length+' '+t('bytes')+' · '+(sigOk?'0xAA55 OK':'⚠️ '+t('noSignature'))+' · '+t('v86Booting'),'ok');
+  await runInV86(result);
+  btnRun.disabled=false;
+});
+</script>
+</body>
+</html>
