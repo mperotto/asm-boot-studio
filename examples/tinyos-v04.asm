@@ -1,13 +1,13 @@
 ; ================================================================
-; TinyOS v0.4 — 8 setores (4096 bytes)
+; TinyOS v0.4 - 8 sectors (4096 bytes)
 ; VESA 800x600 | PM32 | BIOS 8x8 font | Terminal 100x72
-; Teclado + PS/2 Mouse | 256 cores
+; Keyboard + PS/2 Mouse | 256 colors
 ;
-; Teclas: imprimíveis → terminal | Enter | Backspace | ESC=cor
-; Mouse: move cursor vermelho 4x4
+; Keys: printable chars -> terminal | Enter | Backspace | ESC=color
+; Mouse: moves the 4x4 red cursor
 ; ================================================================
 
-; ---- SETOR 1: bootstrap real mode (512 bytes) ----
+; ---- SECTOR 1: real-mode bootstrap (512 bytes) ----
 [BITS 16]
 SECTION boot vstart=0x7C00
 
@@ -18,33 +18,33 @@ SECTION boot vstart=0x7C00
     mov ss, ax
     mov sp, 0x7C00
 
-    ; VESA modo 0x103: 800x600, 256 cores, LFB
-    ; Get mode info → buffer em 0x0000:0x0800
+    ; VESA mode 0x103: 800x600, 256 colors, LFB
+    ; Get mode info -> buffer at 0x0000:0x0800
     xor ax, ax
     mov es, ax
     mov di, 0x0800
     mov ax, 0x4F01
     mov cx, 0x0103
     int 0x10
-    ; Guarda PhysBasePtr (offset 40 no mode info block) em 0x0700
+    ; Store PhysBasePtr (offset 40 in the mode info block) at 0x0700
     mov eax, dword [0x0828]     ; 0x0800 + 40 = 0x0828
     mov dword [0x0700], eax
-    ; Ativa modo com LFB (bit 14)
+    ; Enable mode with LFB (bit 14)
     mov ax, 0x4F02
     mov bx, 0x4103              ; 0x0103 | 0x4000
     int 0x10
 
     ; Init mouse PS/2
     call pw
-    mov al, 0xA8              ; habilita porta aux
+    mov al, 0xA8              ; enable aux port
     out 0x64, al
     call pw
-    mov al, 0x20              ; lê CCB
+    mov al, 0x20              ; read CCB
     out 0x64, al
     call pr
     in al, 0x60
-    or  al, 0x02              ; habilita IRQ12
-    and al, 0xDF              ; habilita clock mouse
+    or  al, 0x02              ; enable IRQ12
+    and al, 0xDF              ; enable mouse clock
     push ax
     call pw
     mov al, 0x60
@@ -53,15 +53,15 @@ SECTION boot vstart=0x7C00
     pop ax
     out 0x60, al
     call pw
-    mov al, 0xD4              ; próximo byte → mouse
+    mov al, 0xD4              ; next byte -> mouse
     out 0x64, al
     call pw
     mov al, 0xF4              ; enable data reporting
     out 0x60, al
     call pr
-    in al, 0x60               ; descarta ACK
+    in al, 0x60               ; discard ACK
 
-    ; Carrega setores 2-8 (7 setores) em 0x8000
+    ; Load sectors 2-8 (7 sectors) at 0x8000
     xor ax, ax
     mov es, ax
     mov bx, 0x8000
@@ -98,23 +98,23 @@ dw 0xAA55
 
 
 ; ================================================================
-; SETORES 2-8: Kernel 32-bit (0x8000, até 3584 bytes)
+; SECTORS 2-8: 32-bit kernel (0x8000, up to 3584 bytes)
 ; ================================================================
 [BITS 32]
 SECTION kernel vstart=0x8000
 
 %define IDT_ADDR   0x0500
-%define LFB_STORE  0x0700       ; endereço LFB gravado pelo stage1
+%define LFB_STORE  0x0700       ; LFB address stored by stage1
 %define W          800
 %define H          600
 %define TEXT_Y1    8
 %define TEXT_Y2    592          ; STAT_Y = TEXT_Y2 = H-8
 %define STAT_Y     592
-%define BG         0x01         ; azul escuro
+%define BG         0x01         ; dark blue
 %define COLS       100          ; 800/8
-%define SCROLL_AT  74           ; scroll quando cur_row atinge 74 (última visível: 73)
+%define SCROLL_AT  74           ; scroll when cur_row reaches 74 (last visible: 73)
 
-; ---- Entrada do kernel ----
+; ---- Kernel entry ----
     mov ax, 0x10
     mov ds, ax
     mov es, ax
@@ -124,11 +124,11 @@ SECTION kernel vstart=0x8000
     mov esp, 0x9F000
     cld
 
-    ; Lê endereço LFB do stage1 (gravado em 0x0700)
+    ; Read the LFB address from stage1 (stored at 0x0700)
     mov eax, [LFB_STORE]
     mov [vga_base], eax
 
-    ; ---- IDT em IDT_ADDR ----
+    ; ---- IDT at IDT_ADDR ----
     mov edi, IDT_ADDR
     mov eax, null_isr
     movzx ebx, ax
@@ -149,7 +149,7 @@ SECTION kernel vstart=0x8000
     call set_gate
     lidt [idt_desc]
 
-    ; ---- Remapeia PIC 8259 ----
+    ; ---- Remap PIC 8259 ----
     mov al, 0x11
     out 0x20, al
     out 0xA0, al
@@ -169,7 +169,7 @@ SECTION kernel vstart=0x8000
     mov al, 0xEF            ; unmask IRQ12 (mouse)
     out 0xA1, al
 
-    ; ---- Gradiente título (y 0-7) ----
+    ; ---- Title gradient (y 0-7) ----
     mov edi, [vga_base]
     mov ecx, 8
 .title_row:
@@ -180,28 +180,28 @@ SECTION kernel vstart=0x8000
 .title_col:
     mov [edi], dl
     inc edi
-    inc dl                  ; dl wraps automático em 256
+    inc dl                  ; dl wraps automatically at 256
     loop .title_col
     pop edi
     add edi, W
     pop ecx
     loop .title_row
 
-    ; ---- Área de texto: azul escuro ----
+    ; ---- Text area: dark blue ----
     mov edi, [vga_base]
     add edi, TEXT_Y1*W
     mov ecx, (TEXT_Y2 - TEXT_Y1)*W / 4
     mov eax, (BG<<24)|(BG<<16)|(BG<<8)|BG
     rep stosd
 
-    ; ---- Barra de status: preto ----
+    ; ---- Status bar: black ----
     mov edi, [vga_base]
     add edi, STAT_Y*W
     mov ecx, (H - STAT_Y)*W / 4
     xor eax, eax
     rep stosd
 
-    ; ---- Título ----
+    ; ---- Title ----
     mov byte [text_fg], 0x0F
     mov esi, str_title
     mov ebx, 4
@@ -215,7 +215,7 @@ SECTION kernel vstart=0x8000
     mov ecx, TEXT_Y1
     call render_str
 
-    ; ---- Estado inicial ----
+    ; ---- Initial state ----
     mov word [cur_col], 0
     mov word [cur_row], 2
     mov byte [text_fg], 0x0F
@@ -232,15 +232,15 @@ SECTION kernel vstart=0x8000
 
 
 ; ================================================================
-; DADOS
+; DATA
 ; ================================================================
 
 idt_desc:    dw 48*8-1
              dd IDT_ADDR
 
-vga_base:    dd 0                ; LFB address (lido do stage1)
+vga_base:    dd 0                ; LFB address (read from stage1)
 
-str_title:   db " TinyOS v0.4 | VESA 800x600 | PM32 | KB+Mouse | 256 cores ", 0
+str_title:   db " TinyOS v0.4 | VESA 800x600 | PM32 | KB+Mouse | 256 colors ", 0
 str_welcome: db " Type=print  Enter=newline  BS=del  ESC=color  Mouse=move", 0
 
 cur_col:     dw 0
@@ -262,7 +262,7 @@ scancode_end:
 
 
 ; ================================================================
-; FUNÇÕES
+; FUNCTIONS
 ; ================================================================
 
 set_gate:
@@ -280,7 +280,7 @@ render_char:
     push edi
     mov esi, font8x8
     movzx edx, al
-    sub edx, 32             ; font começa no char 32 (space)
+    sub edx, 32             ; font starts at char 32 (space)
     imul edx, 8
     add esi, edx
     imul ecx, W
@@ -518,7 +518,7 @@ update_status:
     xor eax, eax
     rep stosd
 
-    ; Render em amarelo, preserva text_fg
+    ; Render in yellow, preserve text_fg
     movzx ecx, byte [text_fg]
     push ecx
     mov byte [text_fg], 0x0E
@@ -537,7 +537,7 @@ update_status:
     ret
 
 dec3_str:
-    ; Convert eax (0-999) → 3 decimal chars at [edi], edi += 3
+    ; Convert eax (0-999) -> 3 decimal chars at [edi], edi += 3
     push edx
     push ecx
     mov ecx, 100
@@ -595,7 +595,7 @@ mouse_isr:
     je .p0
     cmp ebx, 1
     je .p1
-    ; fase 2: delta Y
+    ; phase 2: delta Y
     movsx eax, al
     neg eax
     movsx ebx, word [mouse_y]
@@ -615,7 +615,7 @@ mouse_isr:
     call update_status
     jmp .eoi
 .p1:
-    ; fase 1: delta X — apaga cursor ANTES de mover
+    ; phase 1: delta X - erase cursor BEFORE moving
     call restore_mouse_bg
     movsx eax, al
     movsx ebx, word [mouse_x]
@@ -650,7 +650,7 @@ null_isr:
     iret
 
 ; ================================================================
-; FONT 8x8 embutida — ASCII 32-127 (96 chars × 8 bytes = 768 bytes)
+; Embedded 8x8 font - ASCII 32-127 (96 chars x 8 bytes = 768 bytes)
 ; ================================================================
 font8x8:
     db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00  ; ' '
