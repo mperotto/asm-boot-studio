@@ -35,7 +35,9 @@ button:disabled{opacity:.35;cursor:default;pointer-events:none}
 /* v86 */
 #right{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#080c12;padding:12px;gap:8px}
 #rlabel{font-size:10px;color:#30363d;text-transform:uppercase;letter-spacing:.8px;align-self:flex-start;padding-left:4px}
-#v86-wrap{width:100%;max-width:640px;aspect-ratio:4/3;background:#000;border:2px solid #1b3f6b;border-radius:3px;box-shadow:0 0 18px rgba(63,146,255,.25),inset 0 0 40px rgba(0,20,50,.45);overflow:hidden}
+#v86-wrap{position:relative;width:100%;max-width:640px;aspect-ratio:4/3;background:#000;border:2px solid #1b3f6b;border-radius:3px;box-shadow:0 0 18px rgba(63,146,255,.25),inset 0 0 40px rgba(0,20,50,.45);overflow:hidden}
+#kb-release{position:absolute;top:4px;right:4px;z-index:10;padding:2px 7px;font-size:11px;background:rgba(0,0,0,.6);color:#58a6ff;border:1px solid #1b3f6b;border-radius:4px;cursor:pointer}
+#kb-release:hover{background:rgba(30,60,120,.8)}
 #v86-screen-container{width:100%;height:100%;display:flex;align-items:stretch;justify-content:stretch;background:#000}
 #v86-screen-container>div{flex:1;white-space:pre;font:13px/1.35 'Courier New',monospace;color:#d7eaff;padding:10px 12px;overflow:hidden}
 #v86-screen-container>canvas{width:100% !important;height:100% !important;display:none;image-rendering:pixelated}
@@ -88,6 +90,7 @@ button:disabled{opacity:.35;cursor:default;pointer-events:none}
     <option value="multi">Multi-linha</option>
     <option value="stage2">Dois estágios</option>
     <option value="minimal">Mínimo</option>
+    <option value="tinyos-v03">TinyOS v0.3</option>
   </select>
   <button id="btn-run">▶ Montar &amp; Rodar</button>
   <div class="sp"></div>
@@ -108,6 +111,7 @@ button:disabled{opacity:.35;cursor:default;pointer-events:none}
         <div></div>
         <canvas></canvas>
       </div>
+      <button id="kb-release" title="Release keyboard focus (return to editor)" style="display:none">⌨ Editor</button>
     </div>
   </div>
 </div>
@@ -367,7 +371,7 @@ dw 0xAA55`
 const I18N = {
   'pt-BR': {
   htmlLang:'pt-BR',
-  exampleLabels:{hello:'Ola Mundo',counter:'Contador',multi:'Multi-linha',stage2:'Dois estagios',minimal:'Minimo'},
+  exampleLabels:{hello:'Ola Mundo',counter:'Contador',multi:'Multi-linha',stage2:'Dois estagios',minimal:'Minimo','tinyos-v03':'TinyOS v0.3 (avancado)'},
   fileMenu:'Arquivo ▾',
   projectNamePlaceholder:'nome-do-projeto',
   open:'Abrir arquivo',
@@ -408,7 +412,7 @@ const I18N = {
 },
 'en': {
   htmlLang:'en',
-  exampleLabels:{hello:'Hello World',counter:'Counter',multi:'Multi-line',stage2:'Two-stage boot',minimal:'Minimal'},
+  exampleLabels:{hello:'Hello World',counter:'Counter',multi:'Multi-line',stage2:'Two-stage boot',minimal:'Minimal','tinyos-v03':'TinyOS v0.3 (advanced)'},
   fileMenu:'File ▾',
   projectNamePlaceholder:'project-name',
   open:'Open File',
@@ -449,7 +453,7 @@ const I18N = {
 },
 'zh-CN': {
   htmlLang:'zh-CN',
-  exampleLabels:{hello:'你好，世界',counter:'计数器',multi:'多行输出',stage2:'两阶段启动',minimal:'最小示例'},
+  exampleLabels:{hello:'你好，世界',counter:'计数器',multi:'多行输出',stage2:'两阶段启动',minimal:'最小示例','tinyos-v03':'TinyOS v0.3 (高级)'},
   fileMenu:'文件 ▾',
   projectNamePlaceholder:'项目名称',
   open:'打开文件',
@@ -1152,6 +1156,7 @@ const rlabelEl=document.getElementById('rlabel');
 const pillEl=document.getElementById('pill');
 const v86WrapEl=document.getElementById('v86-wrap');
 const v86ScreenEl=document.getElementById('v86-screen-container');
+const kbReleaseBtn=document.getElementById('kb-release');
 const creditsModalEl=document.getElementById('credits-modal');
 const creditsTitleEl=document.getElementById('credits-title');
 const creditsTextEl=document.getElementById('credits-text');
@@ -1440,6 +1445,11 @@ function resetV86Screen(){
   v86ScreenEl.innerHTML='<div></div><canvas></canvas>';
 }
 
+function focusEditor(){
+  if(asmEditor&&asmEditor.focus)asmEditor.focus();
+  else{const cm=editorEl.querySelector('.cm-editor');if(cm)cm.focus();}
+}
+
 async function destroyV86(){
   if(!v86Emulator)return;
   const vm=v86Emulator;
@@ -1447,6 +1457,7 @@ async function destroyV86(){
   try{await vm.stop()}catch{}
   try{await vm.destroy()}catch{}
   resetV86Screen();
+  kbReleaseBtn.style.display='none';
 }
 
 function updateStaticTexts(){
@@ -1511,6 +1522,9 @@ async function runInV86(result){
   });
   v86Emulator.add_listener('emulator-ready',()=>{
     setMsg('✅ '+t('v86Ready'),'ok');
+    kbReleaseBtn.style.display='block';
+    // Keep editor focused — user must click canvas to interact with v86
+    setTimeout(focusEditor,100);
   });
 }
 
@@ -1574,10 +1588,20 @@ function initEditor(){
   });
 }
 
-exSel.addEventListener('change',()=>{
+exSel.addEventListener('change',async()=>{
   currentProjectId=null;
-  setEditorCode(EXAMPLES[exSel.value]||'');
-  projectNameEl.value=exSel.value;
+  const val=exSel.value;
+  if(EXAMPLES[val]!==undefined){
+    setEditorCode(EXAMPLES[val]);
+  }else{
+    try{
+      setMsg(t('exampleLoaded'),'info');
+      const r=await fetch('./examples/'+val+'.asm');
+      if(!r.ok)throw new Error(r.status);
+      setEditorCode(await r.text());
+    }catch(e){setMsg('Failed to load example: '+e,'err');}
+  }
+  projectNameEl.value=val;
   setMsg(t('exampleLoaded'),'info');
   hexOutEl.textContent=t('hexPlaceholder');
   hexOutEl.style.color='#484f58';
@@ -1608,6 +1632,11 @@ btnCredits.addEventListener('click',openCredits);
 btnLoadSaved.addEventListener('click',()=>loadSavedProject(savedSel.value));
 btnDeleteSaved.addEventListener('click',()=>deleteSavedProject(savedSel.value));
 creditsCloseEl.addEventListener('click',closeCredits);
+kbReleaseBtn.addEventListener('click',()=>{
+  const canvas=v86ScreenEl.querySelector('canvas');
+  if(canvas)canvas.blur();
+  focusEditor();
+});
 creditsModalEl.addEventListener('click',event=>{
   if(event.target===creditsModalEl)closeCredits();
 });
