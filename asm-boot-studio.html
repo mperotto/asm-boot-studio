@@ -127,7 +127,27 @@ button:disabled{opacity:.35;cursor:default;pointer-events:none}
   </div>
 </div>
 <input id="file-open-input" type="file" accept=".asm,.inc,.txt,text/plain" hidden>
+<script>
+// Wrap EventTarget.prototype.addEventListener BEFORE libv86.js loads.
+// All keyboard listeners v86 registers get wrapped; when editor is focused
+// the wrapper skips the v86 handler so keys go only to the editor.
+(function(){
+  var _orig=EventTarget.prototype.addEventListener;
+  EventTarget.prototype.addEventListener=function(type,fn,opts){
+    if(type==='keydown'||type==='keypress'||type==='keyup'){
+      var _fn=fn;
+      var wrapped=function(ev){
+        if(!window._v86BlockKeys)return _fn.call(this,ev);
+      };
+      return _orig.call(this,type,wrapped,opts);
+    }
+    return _orig.call(this,type,fn,opts);
+  };
+  window._restoreAEL=function(){EventTarget.prototype.addEventListener=_orig;};
+})();
+</script>
 <script src="./vendor/v86/libv86.js"></script>
+<script>window._restoreAEL&&window._restoreAEL();</script>
 <script src="./vendor/codemirror/asm-editor.js"></script>
 <script>
 // ═══════════════════════════════════════════════
@@ -1441,11 +1461,11 @@ function resetV86Screen(){
   v86ScreenEl.innerHTML='<div></div><canvas></canvas>';
 }
 
-// v86 uses window.addEventListener('keydown') globally — focus doesn't matter.
-// Block it when any editor element is the active element (bubble fires before window).
-document.addEventListener('keydown',event=>{
-  if(editorEl.contains(document.activeElement))event.stopPropagation();
-},false);
+// Getter: true when editor subtree has focus → v86 wrapped handlers skip
+Object.defineProperty(window,'_v86BlockKeys',{
+  get:()=>editorEl.contains(document.activeElement),
+  configurable:true
+});
 
 function focusEditor(){
   if(asmEditor&&asmEditor.focus)asmEditor.focus();
