@@ -1449,6 +1449,12 @@ editorEl.addEventListener('focusin',()=>{
 editorEl.addEventListener('focusout',()=>{
   if(v86Emulator)v86Emulator.keyboard_set_status(true);
 });
+// Canvas has no tabindex → clicking it doesn't trigger focusout on editor.
+// Explicitly blur editor and re-enable v86 keyboard on mousedown over display.
+v86WrapEl.addEventListener('mousedown',()=>{
+  if(editorEl.contains(document.activeElement))document.activeElement.blur();
+  if(v86Emulator)v86Emulator.keyboard_set_status(true);
+});
 
 function focusEditor(){
   if(asmEditor&&asmEditor.focus)asmEditor.focus();
