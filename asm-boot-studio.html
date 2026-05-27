@@ -1634,14 +1634,17 @@ creditsModalEl.addEventListener('click',event=>{
 });
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&creditsModalEl.classList.contains('open'))closeCredits();
-  // Ctrl+Alt+Enter: release v86 keyboard capture, return focus to editor
+});
+// Capture phase (true) = fires BEFORE v86 canvas listener sees the event
+window.addEventListener('keydown',event=>{
   if(event.key==='Enter'&&event.ctrlKey&&event.altKey){
     event.preventDefault();
+    event.stopPropagation();
     const canvas=v86ScreenEl.querySelector('canvas');
     if(canvas)canvas.blur();
     focusEditor();
   }
-});
+},true);
 savedSel.addEventListener('change',()=>{
   const hasSelection=!!savedSel.value;
   btnLoadSaved.disabled=!hasSelection;
